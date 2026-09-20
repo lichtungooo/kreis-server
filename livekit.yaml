@@ -1,0 +1,34 @@
+# LiveKit-Server fuer den Kreis.
+#
+# Laeuft im Host-Netz, weil WebRTC viele UDP-Ports braucht und NAT
+# zwischen Container und Welt die Verbindung sonst zerlegt.
+
+port: 7881
+
+rtc:
+  # Ein einzelner UDP-Port statt eines Bereichs. Spart Regeln in der
+  # Firewall und reicht fuer die Groessenordnung eines Kreises.
+  udp_port: 7882
+  tcp_port: 7883
+  # Der Server kennt seine oeffentliche Adresse selbst.
+  use_external_ip: true
+
+# TURN uebernimmt, wenn ein Teilnehmer hinter einer strengen Firewall
+# sitzt und weder UDP noch direktes TCP durchkommt. Das Zertifikat
+# holt Traefik, darum hier nur der interne Port.
+turn:
+  enabled: true
+  domain: kreis.wir.ooo
+  tls_port: 5349
+  udp_port: 3478
+  external_tls: true
+
+# Raeume verschwinden von selbst, wenn niemand mehr da ist.
+room:
+  empty_timeout: 300
+  departure_timeout: 20
+  max_participants: 30
+
+logging:
+  level: info
+  json: false

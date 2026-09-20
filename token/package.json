@@ -1,0 +1,14 @@
+{
+  "name": "kreis-token",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Stellt kurzlebige Zutritts-Token fuer LiveKit aus.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "livekit-server-sdk": "^2.9.0"
+  }
+}

@@ -1,0 +1,43 @@
+# kreis-server — LiveKit und Token-Dienst fuer das Kreis-Modul im RLN.
+#
+# Zwei Dienste:
+#   livekit  — der SFU. Leitet Audio, Video und Daten weiter.
+#   token    — signiert kurzlebige Zutritts-Token. Haelt das Geheimnis
+#              vom Browser fern (siehe memory/feedback_sperre_pruefbares.md).
+#
+# Konfiguration in .env, Vorlage in .env.beispiel.
+# Start:  docker compose up -d
+
+services:
+
+  livekit:
+    image: livekit/livekit-server:v1.8
+    container_name: kreis-livekit
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    network_mode: host
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?LIVEKIT_API_KEY fehlt}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET fehlt}"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  token:
+    build: ./token
+    container_name: kreis-token
+    restart: unless-stopped
+    network_mode: bridge
+    environment:
+      LIVEKIT_API_KEY: "${LIVEKIT_API_KEY:?LIVEKIT_API_KEY fehlt}"
+      LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET fehlt}"
+      # Wer darf Token holen. Komma-getrennt, ohne Leerzeichen.
+      ERLAUBTE_HERKUNFT: "${ERLAUBTE_HERKUNFT:-https://reallife.network,http://localhost:5173}"
+      PORT: "7880"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kreis-token.rule=Host(`kreis.wir.ooo`) && PathPrefix(`/token`)"
+      - "traefik.http.routers.kreis-token.entrypoints=websecure"
+      - "traefik.http.routers.kreis-token.tls.certresolver=letsencrypt"
+      - "traefik.http.services.kreis-token.loadbalancer.server.port=7880"
+      - "com.centurylinklabs.watchtower.enable=false"
