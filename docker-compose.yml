@@ -15,28 +15,30 @@ services:
     container_name: kreis-livekit
     restart: unless-stopped
     command: --config /etc/livekit.yaml
-    network_mode: host
+    network_mode: bridge
+    # ⚠ Warum Bridge statt Host, gegen die uebliche Empfehlung:
+    #
+    # Im Host-Netz hat der Container keine Adresse im Docker-Netz, und
+    # Traefiks Docker-Provider verlangt genau die. Er weist eine
+    # vollstaendige Adresse ab: `service error: port is missing`.
+    #
+    # Ein nginx davor half auch nicht: auf diesem Server darf kein
+    # Container den Host erreichen, weder ueber die Bruecke 172.17.0.1
+    # noch ueber die oeffentliche Adresse. Beides laeuft in einen Timeout.
+    #
+    # Mit 1:1-Abbildung der Ports und festem `node_ip` in livekit.yaml
+    # traegt das Bridge-Netz: LiveKit nennt jedem Teilnehmer die richtige
+    # oeffentliche Adresse, und die Pakete finden ihren Weg.
+    ports:
+      - "7881:7881"          # Signaling, geht durch Traefik
+      - "7882:7882/udp"      # Medien
+      - "7883:7883"          # Medien, wenn UDP blockiert ist
+      - "3478:3478/udp"      # TURN
+      - "5349:5349"          # TURN ueber TLS
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?LIVEKIT_API_KEY fehlt}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET fehlt}"
-    labels:
-      # Kein Traefik-Router hier. Ein Container im Host-Netz hat keine
-      # Adresse im Docker-Netz, und der Docker-Provider verlangt genau
-      # die. Den Weg von aussen macht der Dienst `weiterleiter`.
-      - "com.centurylinklabs.watchtower.enable=false"
-
-  # Bringt LiveKit ans Docker-Netz, damit Traefik es erreichen kann.
-  # Begruendung steht in weiterleiter.conf.
-  weiterleiter:
-    image: nginx:1.27-alpine
-    container_name: kreis-weiterleiter
-    restart: unless-stopped
-    network_mode: bridge
-    depends_on:
-      - livekit
-    volumes:
-      - ./weiterleiter.conf:/etc/nginx/conf.d/default.conf:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.kreis-livekit.rule=Host(`kreis.wir.ooo`)"
@@ -44,7 +46,7 @@ services:
       - "traefik.http.routers.kreis-livekit.tls.certresolver=letsencrypt"
       # Niedrige Zahl: der Token-Weg wird zuerst geprueft.
       - "traefik.http.routers.kreis-livekit.priority=1"
-      - "traefik.http.services.kreis-livekit.loadbalancer.server.port=80"
+      - "traefik.http.services.kreis-livekit.loadbalancer.server.port=7881"
       - "com.centurylinklabs.watchtower.enable=false"
 
   token:
