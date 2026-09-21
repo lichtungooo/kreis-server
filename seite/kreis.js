@@ -288,109 +288,303 @@
   }
 
   // ---------- Bühne ----------
+  //
+  // ⚠ Kacheln werden wiederverwendet, niemals neu gebaut.
+  //
+  // Der erste Wurf schrieb bei jedem Ereignis `buehne.innerHTML = ""`
+  // und baute alles neu. `ActiveSpeakersChanged` feuert aber mehrmals
+  // pro Sekunde, sobald jemand spricht. Jedes Mal wurden alle
+  // video-Elemente zerstoert und der Track an ein frisches Element
+  // gehaengt. Der Browser braucht dafuer einen Moment und zeigt so
+  // lange Schwarz: das Bild zuckte dauernd.
+  //
+  // Jetzt liegt je Mensch eine Kachel im Speicher. Beim Auffrischen
+  // aendern sich nur Klassen und Texte. Das video-Element wird nur
+  // angefasst, wenn wirklich ein anderer Track daran gehoert.
+
+  const kacheln = new Map()
+
   function alle() {
     if (!raum) return []
     return [raum.localParticipant, ...raum.remoteParticipants.values()]
   }
 
-  function kachel(person, gross, geteilt) {
-    const ich = person === raum.localParticipant
+  /** Legt eine Kachel an. Passiert einmal je Mensch. */
+  function kachelBauen(person) {
     const el = document.createElement("div")
-    el.className = "kachel" + (gross ? " gross-kachel" : "") + (person.isSpeaking ? " spricht" : "")
+    el.className = "kachel"
 
-    const quelle = geteilt ? Track.Source.ScreenShare : Track.Source.Camera
-    const zeigt = geteilt ? person.isScreenShareEnabled : person.isCameraEnabled
-    const pub = person.getTrackPublication(quelle)
+    const video = document.createElement("video")
+    video.autoplay = true
+    video.playsInline = true
+    video.muted = true
+    video.classList.add("verstecken")
+    el.appendChild(video)
 
-    if (zeigt && pub?.track) {
-      const v = document.createElement("video")
-      v.autoplay = true; v.playsInline = true; v.muted = true
-      v.className = geteilt ? "geteilt" : (ich ? "selbst" : "")
-      pub.track.attach(v)
-      el.appendChild(v)
-    } else {
-      const k = document.createElement("div")
-      k.className = "initialen"
-      const name = person.name || person.identity
-      k.innerHTML = `<b style="background:${farbe(name)}">${initialen(name)}</b>`
-      el.appendChild(k)
+    const initialenFeld = document.createElement("div")
+    initialenFeld.className = "initialen"
+    const name = person.name || person.identity
+    initialenFeld.innerHTML = '<b style="background:' + farbe(name) + '">' + initialen(name) + '</b>'
+    el.appendChild(initialenFeld)
+
+    const audio = document.createElement("audio")
+    audio.autoplay = true
+    el.appendChild(audio)
+
+    const oben = document.createElement("div")
+    oben.className = "oben"
+    el.appendChild(oben)
+
+    const nadel = document.createElement("button")
+    nadel.className = "anheften"
+    nadel.innerHTML = '<svg><use href="#i-nadel"/></svg>'
+    nadel.onclick = () => {
+      angeheftet = angeheftet === person.identity ? null : person.identity
+      buehneBauen()
     }
-
-    if (!ich && !geteilt) {
-      const ton = person.getTrackPublication(Track.Source.Microphone)
-      if (ton?.track) { const a = document.createElement("audio"); a.autoplay = true; ton.track.attach(a); el.appendChild(a) }
-    }
-
-    const z = zeichen.get(person.identity)
-    const frisch = z && Date.now() - z.wann < ZEICHEN_DAUER
-    if (haende.has(person.identity) || frisch) {
-      const oben = document.createElement("div")
-      oben.className = "oben"
-      if (haende.has(person.identity)) oben.innerHTML += '<span class="hand">✋</span>'
-      if (frisch) oben.innerHTML += `<span>${ZEICHEN[z.z] || ""}</span>`
-      el.appendChild(oben)
-    }
-
-    if (!geteilt) {
-      const nadel = document.createElement("button")
-      nadel.className = "anheften"
-      nadel.dataset.fest = String(angeheftet === person.identity)
-      nadel.title = angeheftet === person.identity ? "Nicht mehr festhalten" : "Groß festhalten"
-      nadel.innerHTML = '<svg><use href="#i-nadel"/></svg>'
-      nadel.onclick = () => { angeheftet = angeheftet === person.identity ? null : person.identity; zeichnen() }
-      el.appendChild(nadel)
-    }
+    el.appendChild(nadel)
 
     const fuss = document.createElement("div")
     fuss.className = "fuss"
-    fuss.innerHTML = (person.isMicrophoneEnabled || geteilt ? "" : '<span class="stumm-zeichen"><svg><use href="#i-mikro-aus"/></svg></span>') +
-      `<span class="wer">${person.name || person.identity}${ich && !geteilt ? " (ich)" : ""}${geteilt ? " teilt den Bildschirm" : ""}</span>`
     el.appendChild(fuss)
 
-    return el
+    return {
+      el, video, audio, initialenFeld, oben, nadel, fuss,
+      videoTrack: null, audioTrack: null,
+      // Was zuletzt gezeigt wurde, damit nur Geaendertes angefasst wird.
+      war: {},
+    }
   }
 
-  function zeichnen() {
+  /** Bringt eine Kachel auf den neuesten Stand. Faellt billig aus. */
+  function kachelAuffrischen(k, person, gross, geteilt) {
+    const ich = person === raum.localParticipant
+    const name = person.name || person.identity
+
+    // --- Video: nur anfassen, wenn ein anderer Track daran gehoert ---
+    const quelle = geteilt ? Track.Source.ScreenShare : Track.Source.Camera
+    const zeigt = geteilt ? person.isScreenShareEnabled : person.isCameraEnabled
+    const pub = person.getTrackPublication(quelle)
+    const track = zeigt ? (pub && pub.track ? pub.track : null) : null
+
+    if (track !== k.videoTrack) {
+      // Den alten loesen, sonst haelt er das Element fest und sammelt an.
+      if (k.videoTrack) { try { k.videoTrack.detach(k.video) } catch (e) {} }
+      if (track) { try { track.attach(k.video) } catch (e) {} }
+      k.videoTrack = track
+    }
+
+    const hatBild = Boolean(track)
+    if (k.war.hatBild !== hatBild) {
+      k.video.classList.toggle("verstecken", !hatBild)
+      k.initialenFeld.classList.toggle("verstecken", hatBild)
+      k.war.hatBild = hatBild
+    }
+
+    const videoKlasse = geteilt ? "geteilt" : (ich ? "selbst" : "")
+    if (k.war.videoKlasse !== videoKlasse) {
+      k.video.className = videoKlasse
+      if (!hatBild) k.video.classList.add("verstecken")
+      k.war.videoKlasse = videoKlasse
+    }
+
+    // --- Ton: den eigenen nie zurueckspielen, sonst pfeift es ---
+    const tonPub = (!ich && !geteilt) ? person.getTrackPublication(Track.Source.Microphone) : null
+    const tonTrack = tonPub && tonPub.track ? tonPub.track : null
+    if (tonTrack !== k.audioTrack) {
+      if (k.audioTrack) { try { k.audioTrack.detach(k.audio) } catch (e) {} }
+      if (tonTrack) { try { tonTrack.attach(k.audio) } catch (e) {} }
+      k.audioTrack = tonTrack
+    }
+
+    // --- Klassen ---
+    const klassen = "kachel" + (gross ? " gross-kachel" : "") + (person.isSpeaking ? " spricht" : "")
+    if (k.war.klassen !== klassen) { k.el.className = klassen; k.war.klassen = klassen }
+
+    // --- Hand und Zeichen ---
+    const z = zeichen.get(person.identity)
+    const frisch = z && Date.now() - z.wann < ZEICHEN_DAUER
+    const obenText = (haende.has(person.identity) ? '<span class="hand">✋</span>' : "") +
+      (frisch ? '<span>' + (ZEICHEN[z.z] || "") + '</span>' : "")
+    if (k.war.oben !== obenText) { k.oben.innerHTML = obenText; k.war.oben = obenText }
+
+    // --- Anheften ---
+    const fest = String(angeheftet === person.identity)
+    if (k.war.fest !== fest) {
+      k.nadel.dataset.fest = fest
+      k.nadel.title = fest === "true" ? "Nicht mehr festhalten" : "Groß festhalten"
+      k.war.fest = fest
+    }
+    if (k.war.geteilt !== geteilt) {
+      k.nadel.classList.toggle("verstecken", geteilt)
+      k.war.geteilt = geteilt
+    }
+
+    // --- Fuss ---
+    const stumm = (person.isMicrophoneEnabled || geteilt)
+      ? ""
+      : '<span class="stumm-zeichen"><svg><use href="#i-mikro-aus"/></svg></span>'
+    const wer = name + (ich && !geteilt ? " (ich)" : "") + (geteilt ? " teilt den Bildschirm" : "")
+    const fussText = stumm + '<span class="wer">' + wer + '</span>'
+    if (k.war.fuss !== fussText) { k.fuss.innerHTML = fussText; k.war.fuss = fussText }
+  }
+
+  function kachelHolen(person, gross, geteilt) {
+    let k = kacheln.get(person.identity)
+    if (!k) { k = kachelBauen(person); kacheln.set(person.identity, k) }
+    kachelAuffrischen(k, person, gross, geteilt)
+    return k.el
+  }
+
+  /** Wer den Raum verlassen hat, gibt seine Kachel und seine Tracks frei. */
+  function kachelnAufraeumen(dabei) {
+    for (const [kennung, k] of kacheln) {
+      if (dabei.has(kennung)) continue
+      if (k.videoTrack) { try { k.videoTrack.detach(k.video) } catch (e) {} }
+      if (k.audioTrack) { try { k.audioTrack.detach(k.audio) } catch (e) {} }
+      k.el.remove()
+      kacheln.delete(kennung)
+    }
+  }
+
+  /**
+   * Wer gross gezeigt wird.
+   *
+   * ⚠ Der Wechsel wird gebremst, und das ist der Sinn der Sache.
+   *
+   * `isSpeaking` flattert im Gespraech mehrmals pro Sekunde: ein
+   * Huster, eine Atempause, zwei die sich ins Wort fallen. Wer dem
+   * ungebremst folgt, laesst die grosse Kachel springen, und das ist
+   * anstrengender als jedes Ruckeln.
+   *
+   * Darum bleibt ein Sprecher mindestens zwei Sekunden stehen, bevor
+   * ein anderer ihn abloest. Wer den Bildschirm teilt oder angeheftet
+   * ist, geht immer vor.
+   */
+  const HALTEZEIT = 2000
+  let grosserJetzt = null
+  let grosserSeit = 0
+
+  function grossenWaehlen(leute, teilend) {
+    if (teilend) return teilend
+
+    if (angeheftet) {
+      const fest = leute.find((p) => p.identity === angeheftet)
+      if (fest) return fest
+    }
+
+    const jetzt = Date.now()
+    const bisher = leute.find((p) => p.identity === grosserJetzt)
+    const redet = leute.find((p) => p.isSpeaking && p !== raum.localParticipant)
+
+    if (redet) {
+      if (redet.identity === grosserJetzt) {
+        grosserSeit = jetzt
+      } else if (!bisher || jetzt - grosserSeit > HALTEZEIT) {
+        grosserJetzt = redet.identity
+        grosserSeit = jetzt
+        return redet
+      }
+    }
+
+    if (bisher) return bisher
+
+    const fremd = leute.find((p) => p !== raum.localParticipant) || leute[0] || null
+    if (fremd) { grosserJetzt = fremd.identity; grosserSeit = jetzt }
+    return fremd
+  }
+
+  /**
+   * Baut die Anordnung der Buehne.
+   *
+   * Haengt nur um, wenn sich die Anordnung wirklich aendert: jemand
+   * kommt oder geht, die Ansicht wechselt, jemand teilt den Bildschirm
+   * oder wird angeheftet. Sonst werden nur die Kacheln aufgefrischt.
+   */
+  let letzteAnordnung = ""
+
+  function buehneBauen() {
     if (!raum) return
     const leute = alle()
     const buehne = $("buehne")
-    buehne.innerHTML = ""
+    const teilend = leute.find((p) => p.isScreenShareEnabled) || null
 
-    const teilend = leute.find((p) => p.isScreenShareEnabled)
+    let grosse = null
+    if (ansicht === "sprecher" || teilend) {
+      grosse = grossenWaehlen(leute, teilend)
+    }
+
+    kachelnAufraeumen(new Set(leute.map((p) => p.identity)))
+
+    // Ein Fingerabdruck der Anordnung. Bleibt er gleich, bleibt das DOM.
+    const abdruck = [
+      ansicht,
+      teilend ? teilend.identity : "",
+      grosse ? grosse.identity : "",
+      leute.map((p) => p.identity).join(","),
+    ].join("|")
+
+    if (abdruck === letzteAnordnung) {
+      leute.forEach((p) => {
+        const gross = p === grosse
+        kachelHolen(p, gross, Boolean(teilend) && p === teilend && gross)
+      })
+      return
+    }
+    letzteAnordnung = abdruck
+
+    // Kacheln aus dem Baum loesen, ohne sie zu zerstoeren.
+    kacheln.forEach((k) => k.el.remove())
+    buehne.replaceChildren()
+    buehne.removeAttribute("style")
 
     if (ansicht === "galerie" && !teilend) {
       buehne.className = "raster"
       buehne.dataset.viele = String(Math.min(4, Math.ceil(Math.sqrt(leute.length))))
-      leute.forEach((p) => buehne.appendChild(kachel(p, false, false)))
-    } else {
-      buehne.className = ""
-      buehne.removeAttribute("data-viele")
-      buehne.style.display = "flex"
-      buehne.style.flexDirection = "column"
-      buehne.style.gap = "10px"
-
-      let grosse = teilend
-      if (!grosse && angeheftet) grosse = leute.find((p) => p.identity === angeheftet)
-      if (!grosse) grosse = leute.find((p) => p.isSpeaking && p !== raum.localParticipant)
-      if (!grosse) grosse = leute.find((p) => p !== raum.localParticipant) || leute[0]
-
-      const oben = document.createElement("div")
-      oben.className = "gross"
-      if (grosse) oben.appendChild(kachel(grosse, true, Boolean(teilend)))
-      buehne.appendChild(oben)
-
-      const rest = teilend ? leute : leute.filter((p) => p !== grosse)
-      if (rest.length) {
-        const streifen = document.createElement("div")
-        streifen.className = "streifen"
-        rest.forEach((p) => streifen.appendChild(kachel(p, false, false)))
-        buehne.appendChild(streifen)
-      }
+      leute.forEach((p) => buehne.appendChild(kachelHolen(p, false, false)))
+      return
     }
 
-    knoepfeZeichnen()
-    zahlen()
-    if (seitenblatt) seiteZeichnen()
+    buehne.className = ""
+    buehne.removeAttribute("data-viele")
+    buehne.style.display = "flex"
+    buehne.style.flexDirection = "column"
+    buehne.style.gap = "10px"
+
+    const oben = document.createElement("div")
+    oben.className = "gross"
+    if (grosse) oben.appendChild(kachelHolen(grosse, true, Boolean(teilend)))
+    buehne.appendChild(oben)
+
+    const rest = teilend ? leute : leute.filter((p) => p !== grosse)
+    if (rest.length) {
+      const streifen = document.createElement("div")
+      streifen.className = "streifen"
+      rest.forEach((p) => streifen.appendChild(kachelHolen(p, false, false)))
+      buehne.appendChild(streifen)
+    }
+  }
+
+  /**
+   * Anordnung pruefen, Kacheln auffrischen, Rest nachziehen.
+   *
+   * ⚠ Gebuendelt auf ein Einzelbild. Beim Beitreten oder Stummschalten
+   * feuert LiveKit mehrere Ereignisse hintereinander, und jedes wuerde
+   * sonst seinen eigenen Durchgang ausloesen. So wird daraus einer.
+   */
+  let angefordert = false
+
+  function zeichnen() {
+    if (!raum || angefordert) return
+    angefordert = true
+    requestAnimationFrame(() => {
+      angefordert = false
+      if (!raum) return
+      buehneBauen()
+      knoepfeZeichnen()
+      zahlen()
+      if (seitenblatt) seiteZeichnen()
+    })
   }
 
   function knoepfeZeichnen() {
@@ -708,6 +902,7 @@
     if (raum && !vonAussen) await raum.disconnect()
     raum = null; seit = null
     haende.clear(); zeichen.clear()
+    kacheln.clear(); letzteAnordnung = ""; grosserJetzt = null
     chat.length = 0; rede.length = 0; gelesenBis = 0
     seitenblatt = null
     $("seite").classList.add("verstecken")
