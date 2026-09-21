@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kreis — Prüfraum</title>
+<meta name="robots" content="noindex">
+<style>
+  :root {
+    --grund: #0F1419;
+    --flaeche: #1A2028;
+    --hell: #E6EAED;
+    --leise: #8A97A3;
+    --matt: #5C6873;
+    --gruen: #4ADE80;
+    --rot: #F87171;
+    --rand: #262F39;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: var(--grund); color: var(--hell);
+    font: 400 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px 60px; }
+
+  header { margin-bottom: 28px; }
+  h1 { margin: 0 0 8px; font-size: 26px; font-weight: 650; letter-spacing: -.02em; }
+  .lede { margin: 0; color: var(--leise); max-width: 62ch; }
+  .lede code { background: var(--flaeche); padding: 2px 6px; border-radius: 5px; font-size: 13px; color: var(--hell); }
+
+  .zustand { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 28px; }
+  .lampe {
+    display: flex; align-items: center; gap: 9px;
+    background: var(--flaeche); border-radius: 10px; padding: 10px 14px;
+    font-size: 13px; color: var(--leise);
+  }
+  .lampe i { width: 8px; height: 8px; border-radius: 50%; background: var(--matt); flex: none; }
+  .lampe.gut i { background: var(--gruen); }
+  .lampe.schlecht i { background: var(--rot); }
+  .lampe b { color: var(--hell); font-weight: 550; }
+
+  .kasten { background: var(--flaeche); border-radius: 16px; padding: 22px; }
+  .kasten h2 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+  .kasten p.hin { margin: 0 0 18px; font-size: 13.5px; color: var(--leise); }
+
+  .zeile { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  label { display: block; flex: 1 1 180px; }
+  label span { display: block; margin-bottom: 5px; font-size: 12px; color: var(--leise); }
+  input {
+    width: 100%; background: var(--grund); color: var(--hell);
+    border: 1px solid var(--rand); border-radius: 10px;
+    padding: 10px 12px; font: inherit; font-size: 14px;
+  }
+  input:focus { outline: none; border-color: var(--matt); }
+
+  button {
+    font: inherit; font-size: 14px; font-weight: 550;
+    padding: 10px 20px; border: 0; border-radius: 10px;
+    cursor: pointer; transition: opacity .15s, background .15s;
+  }
+  button:hover { opacity: .88; }
+  button:disabled { opacity: .35; cursor: default; }
+  .haupt { background: var(--gruen); color: #06240F; }
+  .weg { background: var(--rot); color: #2A0A0A; }
+  .still { background: #2A333D; color: var(--hell); }
+  .still.aus { background: #3A2428; color: var(--rot); }
+
+  .kacheln {
+    display: grid; gap: 12px; margin-top: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  .kachel {
+    position: relative; aspect-ratio: 16/9; overflow: hidden;
+    border-radius: 12px; background: #131920;
+  }
+  .kachel.spricht { outline: 3px solid var(--gruen); outline-offset: -3px; }
+  .kachel video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .kachel .initialen {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: 26px; font-weight: 600; color: var(--leise);
+  }
+  .kachel .name {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 18px 10px 8px 10px; font-size: 12.5px;
+    background: linear-gradient(transparent, rgba(0,0,0,.8));
+    display: flex; align-items: center; gap: 6px;
+  }
+  .kachel .stumm { color: var(--rot); font-size: 11px; }
+
+  .steuer { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+
+  .protokoll {
+    margin-top: 18px; padding: 14px; border-radius: 12px; background: var(--grund);
+    max-height: 220px; overflow-y: auto; font-size: 13px;
+  }
+  .protokoll .satz { margin-bottom: 9px; }
+  .protokoll .satz.offen { opacity: .45; }
+  .protokoll .wer { color: var(--gruen); font-weight: 600; font-size: 11.5px; }
+  .protokoll .leer { color: var(--matt); font-style: italic; text-align: center; padding: 18px 0; }
+
+  .meldung { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: 13.5px; }
+  .meldung.fehler { background: #3A1E22; color: #FCA5A5; }
+  .meldung.gut { background: #16301F; color: #86EFAC; }
+
+  footer { margin-top: 34px; font-size: 13px; color: var(--matt); line-height: 1.7; }
+  footer a { color: var(--leise); }
+  .verstecken { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Kreis</h1>
+    <p class="lede">
+      Hier liegt keine Anwendung, sondern der Server dahinter: LiveKit für Ton und Bild,
+      dazu ein Dienst, der Zutritts-Token ausstellt. Der Kreis selbst ist ein Modul im
+      Real Life Network. Diese Seite prüft, ob der Weg trägt.
+    </p>
+  </header>
+
+  <div class="zustand">
+    <span class="lampe" id="l-token"><i></i><b>Token-Dienst</b> <span id="t-token">wird geprüft</span></span>
+    <span class="lampe" id="l-livekit"><i></i><b>LiveKit</b> <span id="t-livekit">wird geprüft</span></span>
+    <span class="lampe" id="l-raum"><i></i><b>Raum</b> <span id="t-raum">draußen</span></span>
+  </div>
+
+  <div class="kasten">
+    <h2>Prüfraum</h2>
+    <p class="hin">
+      Zwei Geräte mit demselben Raumnamen sehen und hören einander. Zum Prüfen genügt
+      ein zweiter Browsertab.
+    </p>
+
+    <div class="zeile" id="vorraum">
+      <label><span>Raum</span><input id="raum" value="probe" maxlength="64"></label>
+      <label><span>Dein Name</span><input id="name" placeholder="Timo" maxlength="48"></label>
+      <button class="haupt" id="beitreten">Beitreten</button>
+    </div>
+
+    <div id="drin" class="verstecken">
+      <div class="steuer">
+        <button class="still" id="mikro">Mikrofon an</button>
+        <button class="still aus" id="kamera">Kamera aus</button>
+        <button class="still" id="protokollAn">Protokoll mitlaufen lassen</button>
+        <button class="weg" id="gehen" style="margin-left:auto">Verlassen</button>
+      </div>
+
+      <div class="kacheln" id="kacheln"></div>
+
+      <div class="protokoll verstecken" id="protokoll">
+        <div class="leer">Noch nichts gesagt.</div>
+      </div>
+    </div>
+
+    <div id="meldung"></div>
+  </div>
+
+  <footer>
+    Der Kreis im Real Life Network trägt mehr: Galerie und Sprecher-Ansicht, Chat, Zeichen,
+    gehobene Hände, Bildschirm teilen und ein Protokoll, das ins Wissensfeld geht.<br>
+    Quellcode: <a href="https://github.com/lichtungooo/kreis-server">kreis-server</a>
+    · Getragen vom Kollektiv Lichtung e.V.
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.9.0/dist/livekit-client.umd.min.js"></script>
+<script>
+(function () {
+  "use strict"
+
+  const { Room, RoomEvent, Track } = LivekitClient
+  const $ = (id) => document.getElementById(id)
+
+  const TOKEN_URL = location.origin + "/token"
+  const SERVER_URL = "wss://" + location.host
+
+  let raum = null
+  let erkennung = null
+  let sollErkennen = false
+  const zeilen = []
+
+  // ---- Lampen ----
+  function lampe(welche, gut, text) {
+    const el = $("l-" + welche)
+    el.classList.remove("gut", "schlecht")
+    el.classList.add(gut ? "gut" : "schlecht")
+    $("t-" + welche).textContent = text
+  }
+
+  function melden(text, art) {
+    $("meldung").innerHTML = text
+      ? `<div class="meldung ${art || "fehler"}">${text}</div>`
+      : ""
+  }
+
+  // ---- Beim Laden pruefen, ob die Dienste wach sind ----
+  async function pruefen() {
+    try {
+      const a = await fetch(TOKEN_URL + "/gesund")
+      lampe("token", a.ok, a.ok ? "wach" : "antwortet mit " + a.status)
+    } catch {
+      lampe("token", false, "nicht erreichbar")
+    }
+    try {
+      const a = await fetch(location.origin + "/rtc/validate")
+      // 401 heisst: er lebt und will ein Token sehen. Genau richtig.
+      lampe("livekit", a.status === 401 || a.ok, a.status === 401 ? "wach" : "antwortet mit " + a.status)
+    } catch {
+      lampe("livekit", false, "nicht erreichbar")
+    }
+  }
+
+  // ---- Kacheln ----
+  function initialen(name) {
+    return name.split(/\s+/).map((t) => t[0]).filter(Boolean).join("").slice(0, 2).toUpperCase()
+  }
+
+  function kachelnZeichnen() {
+    if (!raum) return
+    const alle = [raum.localParticipant, ...raum.remoteParticipants.values()]
+    const ziel = $("kacheln")
+    ziel.innerHTML = ""
+
+    alle.forEach((person) => {
+      const ich = person === raum.localParticipant
+      const kachel = document.createElement("div")
+      kachel.className = "kachel" + (person.isSpeaking ? " spricht" : "")
+
+      const bild = person.getTrackPublication(Track.Source.Camera)
+      if (bild && bild.track && person.isCameraEnabled) {
+        const v = document.createElement("video")
+        v.autoplay = true
+        v.playsInline = true
+        v.muted = true
+        bild.track.attach(v)
+        kachel.appendChild(v)
+      } else {
+        const kreis = document.createElement("div")
+        kreis.className = "initialen"
+        kreis.textContent = initialen(person.name || person.identity) || "?"
+        kachel.appendChild(kreis)
+      }
+
+      if (!ich) {
+        const ton = person.getTrackPublication(Track.Source.Microphone)
+        if (ton && ton.track) {
+          const a = document.createElement("audio")
+          a.autoplay = true
+          ton.track.attach(a)
+          kachel.appendChild(a)
+        }
+      }
+
+      const name = document.createElement("div")
+      name.className = "name"
+      name.innerHTML = (person.isMicrophoneEnabled ? "" : '<span class="stumm">stumm</span>') +
+        "<span>" + (person.name || person.identity) + (ich ? " (ich)" : "") + "</span>"
+      kachel.appendChild(name)
+
+      ziel.appendChild(kachel)
+    })
+  }
+
+  // ---- Beitreten ----
+  $("beitreten").addEventListener("click", async () => {
+    const raumName = $("raum").value.trim()
+    const name = $("name").value.trim() || "Gast"
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(raumName)) {
+      melden("Der Raumname trägt Buchstaben, Ziffern, Strich und Unterstrich.")
+      return
+    }
+
+    melden("")
+    $("beitreten").disabled = true
+    $("beitreten").textContent = "verbindet"
+
+    try {
+      const adresse = new URL(TOKEN_URL)
+      adresse.searchParams.set("raum", raumName)
+      adresse.searchParams.set("name", name)
+      const antwort = await fetch(adresse)
+      if (!antwort.ok) {
+        const k = await antwort.json().catch(() => ({}))
+        throw new Error(k.fehler || "Der Token-Dienst antwortete mit " + antwort.status)
+      }
+      const { token } = await antwort.json()
+
+      raum = new Room({ adaptiveStream: true, dynacast: true })
+
+      const frisch = () => kachelnZeichnen()
+      raum.on(RoomEvent.ParticipantConnected, frisch)
+      raum.on(RoomEvent.ParticipantDisconnected, frisch)
+      raum.on(RoomEvent.TrackSubscribed, frisch)
+      raum.on(RoomEvent.TrackUnsubscribed, frisch)
+      raum.on(RoomEvent.TrackMuted, frisch)
+      raum.on(RoomEvent.TrackUnmuted, frisch)
+      raum.on(RoomEvent.LocalTrackPublished, frisch)
+      raum.on(RoomEvent.LocalTrackUnpublished, frisch)
+      raum.on(RoomEvent.ActiveSpeakersChanged, frisch)
+      raum.on(RoomEvent.Disconnected, () => verlassen(true))
+
+      raum.on(RoomEvent.DataReceived, (nutzlast) => {
+        try {
+          const n = JSON.parse(new TextDecoder().decode(nutzlast))
+          if (n.art === "transkript") zeileAblegen(n.zeile)
+        } catch {}
+      })
+
+      await raum.connect(SERVER_URL, token)
+      await raum.localParticipant.setMicrophoneEnabled(true)
+
+      lampe("raum", true, "drin, Raum " + raumName)
+      $("vorraum").classList.add("verstecken")
+      $("drin").classList.remove("verstecken")
+      melden("Der Weg steht: Token geholt, verbunden, Raum betreten.", "gut")
+      kachelnZeichnen()
+    } catch (e) {
+      melden(e.message || "Die Verbindung kam nicht zustande.")
+      lampe("raum", false, "fehlgeschlagen")
+    } finally {
+      $("beitreten").disabled = false
+      $("beitreten").textContent = "Beitreten"
+    }
+  })
+
+  // ---- Steuerung ----
+  $("mikro").addEventListener("click", async () => {
+    if (!raum) return
+    const an = !raum.localParticipant.isMicrophoneEnabled
+    await raum.localParticipant.setMicrophoneEnabled(an)
+    $("mikro").textContent = an ? "Mikrofon an" : "Mikrofon aus"
+    $("mikro").classList.toggle("aus", !an)
+    kachelnZeichnen()
+  })
+
+  $("kamera").addEventListener("click", async () => {
+    if (!raum) return
+    const an = !raum.localParticipant.isCameraEnabled
+    await raum.localParticipant.setCameraEnabled(an)
+    $("kamera").textContent = an ? "Kamera an" : "Kamera aus"
+    $("kamera").classList.toggle("aus", !an)
+    kachelnZeichnen()
+  })
+
+  $("gehen").addEventListener("click", () => verlassen(false))
+
+  async function verlassen(vonAussen) {
+    protokollHalten()
+    if (raum && !vonAussen) await raum.disconnect()
+    raum = null
+    $("drin").classList.add("verstecken")
+    $("vorraum").classList.remove("verstecken")
+    $("kacheln").innerHTML = ""
+    lampe("raum", false, "draußen")
+    melden("")
+  }
+
+  // ---- Protokoll: jeder schreibt sein eigenes Mikrofon mit ----
+  function zeileAblegen(zeile) {
+    const i = zeilen.findIndex((z) => z.wer === zeile.wer && z.offen)
+    if (i >= 0) zeilen.splice(i, 1)
+    if (zeile.text.trim()) zeilen.push({ ...zeile, offen: zeile.vorlaeufig })
+    protokollZeichnen()
+  }
+
+  function protokollZeichnen() {
+    const ziel = $("protokoll")
+    if (!zeilen.length) {
+      ziel.innerHTML = '<div class="leer">Noch nichts gesagt.</div>'
+      return
+    }
+    ziel.innerHTML = zeilen.map((z) => {
+      const uhr = new Date(z.wann).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
+      return `<div class="satz ${z.offen ? "offen" : ""}">
+        <span class="wer">${z.name}</span> <span style="color:var(--matt);font-size:11px">${uhr}</span><br>${z.text}
+      </div>`
+    }).join("")
+    ziel.scrollTop = ziel.scrollHeight
+  }
+
+  $("protokollAn").addEventListener("click", () => {
+    if (sollErkennen) { protokollHalten(); return }
+    if (!raum) return
+
+    const Bauplan = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!Bauplan) {
+      melden("Dieser Browser kennt keine Spracherkennung. Chrome und Edge tragen sie.")
+      return
+    }
+
+    erkennung = new Bauplan()
+    erkennung.lang = "de-DE"
+    erkennung.continuous = true
+    erkennung.interimResults = true
+
+    erkennung.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const text = String(e.results[i][0]?.transcript ?? "").trim()
+        if (!text) continue
+        const zeile = {
+          id: Date.now() + "-" + i,
+          wer: raum.localParticipant.identity,
+          name: raum.localParticipant.name || "ich",
+          text,
+          wann: Date.now(),
+          vorlaeufig: !e.results[i].isFinal,
+        }
+        zeileAblegen(zeile)
+        const nutzlast = new TextEncoder().encode(JSON.stringify({ art: "transkript", zeile }))
+        raum.localParticipant.publishData(nutzlast, { reliable: true })
+      }
+    }
+
+    erkennung.onerror = (e) => {
+      const art = String(e?.error ?? "")
+      if (art === "no-speech" || art === "aborted") return
+      melden("Die Spracherkennung meldet: " + art)
+    }
+
+    // Chrome beendet sie nach einer Weile Stille von selbst.
+    erkennung.onend = () => { if (sollErkennen) { try { erkennung.start() } catch {} } }
+
+    try {
+      erkennung.start()
+      sollErkennen = true
+      $("protokollAn").textContent = "Protokoll läuft mit"
+      $("protokoll").classList.remove("verstecken")
+    } catch (e) {
+      melden(e.message)
+    }
+  })
+
+  function protokollHalten() {
+    sollErkennen = false
+    if (erkennung) { try { erkennung.stop() } catch {} }
+    erkennung = null
+    $("protokollAn").textContent = "Protokoll mitlaufen lassen"
+  }
+
+  pruefen()
+})()
+</script>
+</body>
+</html>
