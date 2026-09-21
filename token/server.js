@@ -1,45 +1,51 @@
 // Token-Dienst fuer den Kreis.
 //
-// Zwei Aufgaben:
-//   1. Raeume anlegen und ihren Zugang ausstellen.
-//   2. Zutritts-Token ausstellen, wenn der Zugang stimmt.
+// Drei Aufgaben:
+//   1. Raeume anlegen und ihre zwei Zugaenge ausstellen.
+//   2. Zutritts-Token ausstellen, wenn ein Zugang stimmt.
+//   3. Was nur ein Moderator darf: stummschalten, entfernen.
 //
 // Das API-Geheimnis von LiveKit liegt niemals im Browser. Siehe
 // memory/feedback_sperre_pruefbares.md.
 
 import http from "node:http"
 import { createHmac, timingSafeEqual } from "node:crypto"
-import { AccessToken } from "livekit-server-sdk"
+import { AccessToken, RoomServiceClient } from "livekit-server-sdk"
 
 const SCHLUESSEL = process.env.LIVEKIT_API_KEY
 const GEHEIMNIS = process.env.LIVEKIT_API_SECRET
 const PORT = Number(process.env.PORT || 7880)
 const HERKUNFT = (process.env.ERLAUBTE_HERKUNFT || "").split(",").map((h) => h.trim()).filter(Boolean)
+// Der Weg zum LiveKit-Server im Docker-Netz, fuer die Moderator-Befehle.
+const LIVEKIT_WEG = process.env.LIVEKIT_WEG || "http://kreis-livekit:7881"
 
 if (!SCHLUESSEL || !GEHEIMNIS) {
   console.error("LIVEKIT_API_KEY und LIVEKIT_API_SECRET fehlen.")
   process.exit(1)
 }
 
+const saal = new RoomServiceClient(LIVEKIT_WEG, SCHLUESSEL, GEHEIMNIS)
+
 // Raum- und Personennamen bleiben eng. Was nicht passt, wird abgewiesen
 // statt zurechtgebogen.
 const RAUM_MUSTER = /^[a-z0-9][a-z0-9_-]{1,62}[a-z0-9]$/
 const NAME_MUSTER = /^[\p{L}\p{N} .,'’-]{1,48}$/u
+const KENNUNG_MUSTER = /^[a-zA-Z0-9_-]{1,64}$/
 
 /**
- * Das Zugangswort eines Raums.
+ * Die zwei Zugaenge eines Raums.
  *
- * Es wird aus dem Raumnamen abgeleitet, nicht gespeichert. Wer den
+ * Sie werden aus dem Raumnamen abgeleitet, nicht gespeichert. Wer den
  * Raumnamen kennt, kommt trotzdem nicht hinein, denn ohne das Server-
- * geheimnis laesst sich das Wort nicht errechnen. Und derselbe Raum
- * traegt immer dasselbe Wort, darum bleibt ein verschickter Link gueltig.
+ * geheimnis laesst sich kein Wort errechnen. Und derselbe Raum traegt
+ * immer dieselben Woerter, darum bleibt ein verschickter Link gueltig.
  *
- * Ein Raum laesst sich so nicht einzeln schliessen. Fuer einen Kreis
- * unter Bekannten traegt das; wer mehr braucht, speichert Raeume.
+ * Zwei getrennte Woerter, damit ein Gast-Link nicht zum Moderator macht.
+ * Wer den Raum anlegt, bekommt beide; wer eingeladen wird, nur eines.
  */
-function zugangswort(raum) {
+function zugangswort(raum, rolle) {
   return createHmac("sha256", GEHEIMNIS)
-    .update("kreis-raum:" + raum)
+    .update(`kreis-raum:${rolle}:${raum}`)
     .digest("base64url")
     .slice(0, 12)
 }
@@ -50,6 +56,13 @@ function gleich(a, b) {
   const anderer = Buffer.from(String(b))
   if (einer.length !== anderer.length) return false
   return timingSafeEqual(einer, anderer)
+}
+
+/** Welche Rolle dieses Wort traegt. Null, wenn es zu keiner passt. */
+function rolleVon(raum, wort) {
+  if (gleich(wort, zugangswort(raum, "moderator"))) return "moderator"
+  if (gleich(wort, zugangswort(raum, "gast"))) return "gast"
+  return null
 }
 
 /**
@@ -64,7 +77,7 @@ function gleich(a, b) {
  * Was hier geprueft wird, ist genau das, was CORS leisten kann: dass
  * eine FREMDE Seite im Browser eines Menschen keine Token zieht. Gegen
  * ein Programm ohne Browser hilft kein Kopf, denn der laesst sich frei
- * setzen. Dagegen steht das Zugangswort.
+ * setzen. Dagegen stehen die Zugangsworte.
  */
 function herkunftErlaubt(anfrage) {
   const herkunft = anfrage.headers.origin
@@ -117,22 +130,26 @@ const server = http.createServer(async (anfrage, antwort) => {
     return
   }
 
-  // ---- Einen Raum anlegen und sein Zugangswort zurueckgeben ----
+  const raum = (adresse.searchParams.get("raum") || "").toLowerCase().trim()
+
+  // ---- Einen Raum anlegen und beide Zugaenge zurueckgeben ----
   if (weg === "/token/raum") {
-    const raum = (adresse.searchParams.get("raum") || "").toLowerCase().trim()
     if (!RAUM_MUSTER.test(raum)) {
       antworte(antwort, 400, {
         fehler: "Der Raumname trägt Kleinbuchstaben, Ziffern, Strich und Unterstrich, drei bis vierundsechzig Zeichen.",
       }, herkunft)
       return
     }
-    antworte(antwort, 200, { raum, zugang: zugangswort(raum) }, herkunft)
+    antworte(antwort, 200, {
+      raum,
+      moderator: zugangswort(raum, "moderator"),
+      gast: zugangswort(raum, "gast"),
+    }, herkunft)
     return
   }
 
-  // ---- Zutritt geben, wenn das Zugangswort stimmt ----
+  // ---- Zutritt geben, wenn ein Zugangswort stimmt ----
   if (weg === "/token") {
-    const raum = (adresse.searchParams.get("raum") || "").toLowerCase().trim()
     const name = adresse.searchParams.get("name") || ""
     const zugang = adresse.searchParams.get("zugang") || ""
 
@@ -144,7 +161,9 @@ const server = http.createServer(async (anfrage, antwort) => {
       antworte(antwort, 400, { fehler: "Der Name trägt bis zu achtundvierzig Zeichen, keine Steuerzeichen." }, herkunft)
       return
     }
-    if (!gleich(zugang, zugangswort(raum))) {
+
+    const rolle = rolleVon(raum, zugang)
+    if (!rolle) {
       antworte(antwort, 403, { fehler: "Dieser Zugang stimmt für diesen Raum nicht." }, herkunft)
       return
     }
@@ -152,7 +171,7 @@ const server = http.createServer(async (anfrage, antwort) => {
     try {
       // Eine eigene Kennung je Mensch und Sitzung, damit zwei mit
       // gleichem Namen sich nicht gegenseitig aus dem Raum werfen.
-      const wer = `g-${Math.random().toString(36).slice(2, 10)}`
+      const wer = `${rolle === "moderator" ? "m" : "g"}-${Math.random().toString(36).slice(2, 10)}`
 
       const token = new AccessToken(SCHLUESSEL, GEHEIMNIS, {
         identity: wer,
@@ -169,10 +188,66 @@ const server = http.createServer(async (anfrage, antwort) => {
         canPublishData: true,
       })
 
-      antworte(antwort, 200, { token: await token.toJwt(), kennung: wer }, herkunft)
+      antworte(antwort, 200, { token: await token.toJwt(), kennung: wer, rolle }, herkunft)
     } catch (fehler) {
       console.error("Token fehlgeschlagen:", fehler)
       antworte(antwort, 500, { fehler: "Das Token ließ sich nicht ausstellen." }, herkunft)
+    }
+    return
+  }
+
+  // ---- Was nur ein Moderator darf ----
+  //
+  // ⚠ Diese Befehle laufen ueber die Server-API von LiveKit, nicht ueber
+  // den Browser. Ein Teilnehmer kann einen anderen nicht selbst
+  // stummschalten, und das ist richtig so: die Sperre haengt am
+  // Moderator-Wort, das er nicht hat, nicht an einer Behauptung.
+  if (weg === "/token/mod") {
+    const zugang = adresse.searchParams.get("zugang") || ""
+    const was = adresse.searchParams.get("was") || ""
+    const wen = adresse.searchParams.get("wen") || ""
+
+    if (!RAUM_MUSTER.test(raum)) {
+      antworte(antwort, 400, { fehler: "Der Raumname passt nicht." }, herkunft)
+      return
+    }
+    if (!KENNUNG_MUSTER.test(wen)) {
+      antworte(antwort, 400, { fehler: "Die Kennung passt nicht." }, herkunft)
+      return
+    }
+    if (rolleVon(raum, zugang) !== "moderator") {
+      console.warn("Moderator-Befehl ohne Moderator-Wort:", raum, was)
+      antworte(antwort, 403, { fehler: "Das darf nur, wer den Raum führt." }, herkunft)
+      return
+    }
+
+    try {
+      if (was === "stumm") {
+        // Alle Ton-Spuren dieser Person stumm stellen.
+        const leute = await saal.listParticipants(raum)
+        const person = leute.find((p) => p.identity === wen)
+        if (!person) {
+          antworte(antwort, 404, { fehler: "Diese Person ist nicht im Raum." }, herkunft)
+          return
+        }
+        const spuren = (person.tracks || []).filter((t) => t.type === 0 || t.source === 2)
+        for (const spur of spuren) {
+          await saal.mutePublishedTrack(raum, wen, spur.sid, true)
+        }
+        antworte(antwort, 200, { getan: "stumm", wen, spuren: spuren.length }, herkunft)
+        return
+      }
+
+      if (was === "raus") {
+        await saal.removeParticipant(raum, wen)
+        antworte(antwort, 200, { getan: "raus", wen }, herkunft)
+        return
+      }
+
+      antworte(antwort, 400, { fehler: "Unbekannter Befehl." }, herkunft)
+    } catch (fehler) {
+      console.error("Moderator-Befehl fehlgeschlagen:", fehler)
+      antworte(antwort, 500, { fehler: "Der Befehl ging nicht durch." }, herkunft)
     }
     return
   }
@@ -182,4 +257,5 @@ const server = http.createServer(async (anfrage, antwort) => {
 
 server.listen(PORT, () => {
   console.log(`Token-Dienst wach auf Port ${PORT}. Erlaubte Herkunft: ${HERKUNFT.join(", ") || "jede"}`)
+  console.log(`LiveKit erreichbar unter ${LIVEKIT_WEG}`)
 })

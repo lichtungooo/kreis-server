@@ -1,12 +1,27 @@
 # kreis-server — LiveKit und Token-Dienst fuer das Kreis-Modul im RLN.
 #
-# Zwei Dienste:
+# Drei Dienste:
 #   livekit  — der SFU. Leitet Audio, Video und Daten weiter.
-#   token    — signiert kurzlebige Zutritts-Token. Haelt das Geheimnis
-#              vom Browser fern (siehe memory/feedback_sperre_pruefbares.md).
+#   token    — stellt Zutritts-Token aus und fuehrt Moderator-Befehle.
+#   seite    — die Oberflaeche unter kreis.wir.ooo.
 #
 # Konfiguration in .env, Vorlage in .env.beispiel.
+#
+# ⚠ Einmalig noetig, damit Traefik die Dienste findet:
+#     docker network create kreis
+#     docker network connect kreis traefik
+#
+# Grund: im Standard-Bridge-Netz gibt es keine Namensaufloesung zwischen
+# Containern. Der Token-Dienst muss LiveKit aber beim Namen rufen koennen,
+# um Moderator-Befehle abzusetzen. Traefik haengt ohnehin schon in
+# mehreren Netzen (humhub_default, supabase), das hier ist eines mehr.
+#
 # Start:  docker compose up -d
+
+networks:
+  kreis:
+    name: kreis
+    external: true
 
 services:
 
@@ -15,7 +30,7 @@ services:
     container_name: kreis-livekit
     restart: unless-stopped
     command: --config /etc/livekit.yaml
-    network_mode: bridge
+    networks: [kreis]
     # ⚠ Warum Bridge statt Host, gegen die uebliche Empfehlung:
     #
     # Im Host-Netz hat der Container keine Adresse im Docker-Netz, und
@@ -41,9 +56,9 @@ services:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?LIVEKIT_API_KEY fehlt}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET fehlt}"
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=kreis"
       # LiveKit braucht nur seine eigenen Wege. Die Wurzel gibt es an die
-      # Seite ab, sonst steht dort nur sein Lebenszeichen `OK`, und wer
-      # die Adresse aufruft, weiss nicht, was er vor sich hat.
+      # Seite ab, sonst steht dort nur sein Lebenszeichen `OK`.
       - "traefik.http.routers.kreis-livekit.rule=Host(`kreis.wir.ooo`) && (PathPrefix(`/rtc`) || PathPrefix(`/twirp`))"
       - "traefik.http.routers.kreis-livekit.entrypoints=websecure"
       - "traefik.http.routers.kreis-livekit.tls.certresolver=letsencrypt"
@@ -55,36 +70,39 @@ services:
     build: ./token
     container_name: kreis-token
     restart: unless-stopped
-    network_mode: bridge
+    networks: [kreis]
+    depends_on:
+      - livekit
     environment:
       LIVEKIT_API_KEY: "${LIVEKIT_API_KEY:?LIVEKIT_API_KEY fehlt}"
       LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET fehlt}"
       # Wer darf Token holen. Komma-getrennt, ohne Leerzeichen.
       ERLAUBTE_HERKUNFT: "${ERLAUBTE_HERKUNFT:-https://reallife.network,http://localhost:5173}"
+      # Im gemeinsamen Netz traegt der Dienstname.
+      LIVEKIT_WEG: "http://livekit:7881"
       PORT: "7880"
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=kreis"
       - "traefik.http.routers.kreis-token.rule=Host(`kreis.wir.ooo`) && PathPrefix(`/token`)"
       - "traefik.http.routers.kreis-token.entrypoints=websecure"
       - "traefik.http.routers.kreis-token.tls.certresolver=letsencrypt"
       # Hoehere Zahl gewinnt. Der Token-Weg liegt innerhalb des LiveKit-
       # Wegs, darum muss er zuerst geprueft werden.
-      - "traefik.http.routers.kreis-token.priority=10"
+      - "traefik.http.routers.kreis-token.priority=20"
       - "traefik.http.services.kreis-token.loadbalancer.server.port=7880"
       - "com.centurylinklabs.watchtower.enable=false"
 
-  # Eine schlanke Seite, die zeigt was hier liegt und einen Prueflauf
-  # anbietet. Liegt auf der Wurzel, weil dort sonst nur LiveKits `OK`
-  # steht und niemand weiss, was er vor sich hat.
   seite:
     image: nginx:1.27-alpine
     container_name: kreis-seite
     restart: unless-stopped
-    network_mode: bridge
+    networks: [kreis]
     volumes:
       - ./seite:/usr/share/nginx/html:ro
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=kreis"
       - "traefik.http.routers.kreis-seite.rule=Host(`kreis.wir.ooo`)"
       - "traefik.http.routers.kreis-seite.entrypoints=websecure"
       - "traefik.http.routers.kreis-seite.tls.certresolver=letsencrypt"
