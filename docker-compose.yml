@@ -21,6 +21,16 @@ services:
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?LIVEKIT_API_KEY fehlt}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET fehlt}"
     labels:
+      # ⚠ Ein Container im Host-Netz hat keine Adresse im Docker-Netz,
+      # darum kann Traefik ihn nicht wie sonst finden. Seit Traefik v3
+      # darf ein Dienst statt eines Ports eine vollstaendige Adresse
+      # tragen, und die zeigt hier auf den Host selbst.
+      - "traefik.enable=true"
+      - "traefik.http.routers.kreis-livekit.rule=Host(`kreis.wir.ooo`)"
+      - "traefik.http.routers.kreis-livekit.entrypoints=websecure"
+      - "traefik.http.routers.kreis-livekit.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.kreis-livekit.priority=1"
+      - "traefik.http.services.kreis-livekit.loadbalancer.server.url=http://172.17.0.1:7881"
       - "com.centurylinklabs.watchtower.enable=false"
 
   token:
@@ -39,5 +49,8 @@ services:
       - "traefik.http.routers.kreis-token.rule=Host(`kreis.wir.ooo`) && PathPrefix(`/token`)"
       - "traefik.http.routers.kreis-token.entrypoints=websecure"
       - "traefik.http.routers.kreis-token.tls.certresolver=letsencrypt"
+      # Hoehere Zahl gewinnt. Der Token-Weg liegt innerhalb des LiveKit-
+      # Wegs, darum muss er zuerst geprueft werden.
+      - "traefik.http.routers.kreis-token.priority=10"
       - "traefik.http.services.kreis-token.loadbalancer.server.port=7880"
       - "com.centurylinklabs.watchtower.enable=false"
