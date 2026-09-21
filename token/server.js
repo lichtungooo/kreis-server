@@ -23,15 +23,31 @@ if (!SCHLUESSEL || !GEHEIMNIS) {
 const RAUM_MUSTER = /^[a-zA-Z0-9_-]{1,64}$/
 const NAME_MUSTER = /^[\p{L}\p{N} .,'’-]{1,48}$/u
 
+/**
+ * Darf diese Anfrage ein Token bekommen.
+ *
+ * ⚠ Eine Anfrage ohne `Origin` ist erlaubt, und das ist kein Loch.
+ *
+ * Der Browser setzt diesen Kopf nur, wenn die Seite von woanders kommt.
+ * Ruft die Seite auf kreis.wir.ooo ihren eigenen Token-Dienst, fehlt er.
+ * Wer ihn als "nicht eingetragen" liest, sperrt die eigene Seite aus.
+ *
+ * Was hier geprueft wird, ist genau das, was CORS leisten kann: dass
+ * eine FREMDE Seite im Browser eines Menschen keine Token zieht. Gegen
+ * ein Programm ohne Browser hilft kein Kopf, denn der laesst sich frei
+ * setzen. Der Schutz dagegen ist der kurze Atem des Tokens: eine Stunde,
+ * ein Raum.
+ */
 function herkunftErlaubt(anfrage) {
   const herkunft = anfrage.headers.origin
-  if (!herkunft) return false
+  if (!herkunft) return true
   return HERKUNFT.includes(herkunft)
 }
 
 function kopfzeilen(herkunft) {
   return {
-    "Access-Control-Allow-Origin": herkunft,
+    // Ohne Herkunft braucht es keine Freigabe, dann ist es dieselbe Seite.
+    "Access-Control-Allow-Origin": herkunft || "*",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
