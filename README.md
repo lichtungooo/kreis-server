@@ -41,6 +41,25 @@ Die Datei `.env` bleibt auf dem Server und geht nie ins Repo.
 | 5349 | TURN über TLS | über Traefik |
 | 7880 | Token-Dienst | über Traefik, Pfad `/token` |
 
+## Was der Host noch braucht
+
+**UDP-Empfangspuffer vergrößern.** LiveKit warnt beim Start:
+
+```
+UDP receive buffer is too small for a production set-up
+{"current": 425984, "suggested": 5000000}
+```
+
+Für einen Kreis mit wenigen Leuten trägt der kleine Puffer. Ab etwa zehn gleichzeitigen Teilnehmern gehen Pakete verloren, und das äußert sich als stockender Ton, nicht als Fehlermeldung. Als root:
+
+```bash
+echo "net.core.rmem_max=5000000" >> /etc/sysctl.d/99-livekit.conf
+echo "net.core.wmem_max=5000000" >> /etc/sysctl.d/99-livekit.conf
+sysctl --system
+```
+
+**Ports öffnen**, falls eine Firewall davorsteht: UDP 7882 und 3478, TCP 7883. Auf dem Strato-Server steht aktuell keine.
+
 ## Prüfen
 
 ```bash

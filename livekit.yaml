@@ -10,8 +10,16 @@ rtc:
   # Firewall und reicht fuer die Groessenordnung eines Kreises.
   udp_port: 7882
   tcp_port: 7883
-  # Der Server kennt seine oeffentliche Adresse selbst.
-  use_external_ip: true
+  # ⚠ Die feste Adresse statt der Selbsterkennung.
+  #
+  # Mit `use_external_ip: true` sammelt LiveKit jede Adresse ein, die es
+  # auf dem Host findet. Im Host-Netz sind das auch die Docker-Bruecken
+  # und vierzig Link-Local-Adressen aus dem 169.254er Bereich. Die bietet
+  # der Server dann als Verbindungswege an, und ein Teilnehmer probiert
+  # sie der Reihe nach durch, bis er die richtige trifft. Das kostet
+  # Sekunden beim Betreten und misslingt gelegentlich ganz.
+  use_external_ip: false
+  node_ip: 85.214.196.122
 
 # TURN uebernimmt, wenn ein Teilnehmer hinter einer strengen Firewall
 # sitzt und weder UDP noch direktes TCP durchkommt. Das Zertifikat
