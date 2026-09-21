@@ -3,446 +3,198 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kreis — Prüfraum</title>
+<title>Kreis</title>
 <meta name="robots" content="noindex">
-<style>
-  :root {
-    --grund: #0F1419;
-    --flaeche: #1A2028;
-    --hell: #E6EAED;
-    --leise: #8A97A3;
-    --matt: #5C6873;
-    --gruen: #4ADE80;
-    --rot: #F87171;
-    --rand: #262F39;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; min-height: 100vh;
-    background: var(--grund); color: var(--hell);
-    font: 400 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px 60px; }
-
-  header { margin-bottom: 28px; }
-  h1 { margin: 0 0 8px; font-size: 26px; font-weight: 650; letter-spacing: -.02em; }
-  .lede { margin: 0; color: var(--leise); max-width: 62ch; }
-  .lede code { background: var(--flaeche); padding: 2px 6px; border-radius: 5px; font-size: 13px; color: var(--hell); }
-
-  .zustand { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 28px; }
-  .lampe {
-    display: flex; align-items: center; gap: 9px;
-    background: var(--flaeche); border-radius: 10px; padding: 10px 14px;
-    font-size: 13px; color: var(--leise);
-  }
-  .lampe i { width: 8px; height: 8px; border-radius: 50%; background: var(--matt); flex: none; }
-  .lampe.gut i { background: var(--gruen); }
-  .lampe.schlecht i { background: var(--rot); }
-  .lampe b { color: var(--hell); font-weight: 550; }
-
-  .kasten { background: var(--flaeche); border-radius: 16px; padding: 22px; }
-  .kasten h2 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
-  .kasten p.hin { margin: 0 0 18px; font-size: 13.5px; color: var(--leise); }
-
-  .zeile { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
-  label { display: block; flex: 1 1 180px; }
-  label span { display: block; margin-bottom: 5px; font-size: 12px; color: var(--leise); }
-  input {
-    width: 100%; background: var(--grund); color: var(--hell);
-    border: 1px solid var(--rand); border-radius: 10px;
-    padding: 10px 12px; font: inherit; font-size: 14px;
-  }
-  input:focus { outline: none; border-color: var(--matt); }
-
-  button {
-    font: inherit; font-size: 14px; font-weight: 550;
-    padding: 10px 20px; border: 0; border-radius: 10px;
-    cursor: pointer; transition: opacity .15s, background .15s;
-  }
-  button:hover { opacity: .88; }
-  button:disabled { opacity: .35; cursor: default; }
-  .haupt { background: var(--gruen); color: #06240F; }
-  .weg { background: var(--rot); color: #2A0A0A; }
-  .still { background: #2A333D; color: var(--hell); }
-  .still.aus { background: #3A2428; color: var(--rot); }
-
-  .kacheln {
-    display: grid; gap: 12px; margin-top: 20px;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  }
-  .kachel {
-    position: relative; aspect-ratio: 16/9; overflow: hidden;
-    border-radius: 12px; background: #131920;
-  }
-  .kachel.spricht { outline: 3px solid var(--gruen); outline-offset: -3px; }
-  .kachel video { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .kachel .initialen {
-    position: absolute; inset: 0; display: grid; place-items: center;
-    font-size: 26px; font-weight: 600; color: var(--leise);
-  }
-  .kachel .name {
-    position: absolute; left: 0; right: 0; bottom: 0;
-    padding: 18px 10px 8px 10px; font-size: 12.5px;
-    background: linear-gradient(transparent, rgba(0,0,0,.8));
-    display: flex; align-items: center; gap: 6px;
-  }
-  .kachel .stumm { color: var(--rot); font-size: 11px; }
-
-  .steuer { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-
-  .protokoll {
-    margin-top: 18px; padding: 14px; border-radius: 12px; background: var(--grund);
-    max-height: 220px; overflow-y: auto; font-size: 13px;
-  }
-  .protokoll .satz { margin-bottom: 9px; }
-  .protokoll .satz.offen { opacity: .45; }
-  .protokoll .wer { color: var(--gruen); font-weight: 600; font-size: 11.5px; }
-  .protokoll .leer { color: var(--matt); font-style: italic; text-align: center; padding: 18px 0; }
-
-  .meldung { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: 13.5px; }
-  .meldung.fehler { background: #3A1E22; color: #FCA5A5; }
-  .meldung.gut { background: #16301F; color: #86EFAC; }
-
-  footer { margin-top: 34px; font-size: 13px; color: var(--matt); line-height: 1.7; }
-  footer a { color: var(--leise); }
-  .verstecken { display: none; }
-</style>
+<link rel="stylesheet" href="/kreis.css">
 </head>
 <body>
-<div class="wrap">
 
-  <header>
-    <h1>Kreis</h1>
-    <p class="lede">
-      Hier liegt keine Anwendung, sondern der Server dahinter: LiveKit für Ton und Bild,
-      dazu ein Dienst, der Zutritts-Token ausstellt. Der Kreis selbst ist ein Modul im
-      Real Life Network. Diese Seite prüft, ob der Weg trägt.
-    </p>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-mikro" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></symbol>
+  <symbol id="i-mikro-aus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2l20 20M9 9v3a3 3 0 0 0 5.1 2.1M15 9.3V5a3 3 0 0 0-5.9-.7"/><path d="M19 10v1a7 7 0 0 1-.6 2.8M12 18v4M5 10v1a7 7 0 0 0 10.7 6"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m23 7-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></symbol>
+  <symbol id="i-video-aus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2l20 20M16 16v2a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m4 0h5a2 2 0 0 1 2 2v3l5-3.5v11"/></symbol>
+  <symbol id="i-teilen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M12 12V7M9 10l3-3 3 3"/></symbol>
+  <symbol id="i-menschen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-blatt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></symbol>
+  <symbol id="i-lachen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></symbol>
+  <symbol id="i-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol>
+  <symbol id="i-auflegen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.8 12.8 0 0 0 2.5.4A2 2 0 0 1 22 16.9v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.72c.13.9.26 1.7.4 2.5a2 2 0 0 1-.45 2.11L7.8 9.6"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-raster" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></symbol>
+  <symbol id="i-gross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+  <symbol id="i-klein" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v6H2M16 21v-6h6M2 9l7-7M22 15l-7 7"/></symbol>
+  <symbol id="i-pfeil-hoch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></symbol>
+  <symbol id="i-haken" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-nadel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5M9 10.76V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v4.76a2 2 0 0 0 .59 1.42L17 13.5V17H7v-3.5l1.41-1.32A2 2 0 0 0 9 10.76z"/></symbol>
+  <symbol id="i-senden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/></symbol>
+  <symbol id="i-sichern" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></symbol>
+  <symbol id="i-eimer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></symbol>
+</defs></svg>
+
+<!-- ======================= Vorraum ======================= -->
+<div id="vorraum">
+  <div class="vorraum-inhalt">
+
+    <div class="marke">
+      <span class="zeichen">K</span>
+      <div>
+        <b>Kreis</b>
+        <span id="marke-hin">Ton, Bild und ein Protokoll, das mitläuft</span>
+      </div>
+    </div>
+
+    <div class="vorraum-raster">
+
+      <div class="vorschau" id="vorschau">
+        <video id="v-selbst" autoplay playsinline muted class="verstecken"></video>
+        <div class="aus" id="v-aus">
+          <svg><use href="#i-video-aus"/></svg>
+          <span>Die Kamera ist aus</span>
+        </div>
+        <div class="pegel verstecken" id="pegel">
+          <svg><use href="#i-mikro"/></svg>
+          <div class="balken"><i id="pegel-balken"></i></div>
+        </div>
+        <div class="vorschau-knoepfe">
+          <button id="v-mikro" title="Mikrofon"><svg><use href="#i-mikro"/></svg></button>
+          <button id="v-kamera" class="aus" title="Kamera"><svg><use href="#i-video-aus"/></svg></button>
+        </div>
+      </div>
+
+      <div>
+        <h1 id="vorraum-titel">Kreis beitreten</h1>
+        <p class="unterzeile" id="vorraum-unter">Trag deinen Namen ein und komm dazu.</p>
+
+        <label class="feld" id="feld-raum">
+          <span>Raum</span>
+          <input id="e-raum" value="" placeholder="donnerstag-kreis" maxlength="64" autocomplete="off">
+          <div class="hin">Kleinbuchstaben, Ziffern und Striche</div>
+        </label>
+
+        <label class="feld">
+          <span>Dein Name</span>
+          <input id="e-name" placeholder="Timo" maxlength="48" autocomplete="name">
+        </label>
+
+        <label class="feld verstecken" id="feld-mikro">
+          <span>Mikrofon</span>
+          <select id="e-mikro"></select>
+        </label>
+
+        <label class="feld verstecken" id="feld-kamera">
+          <span>Kamera</span>
+          <select id="e-kamera"></select>
+        </label>
+
+        <button class="haupt-knopf" id="beitreten">Beitreten</button>
+        <button class="neben-knopf" id="anlegen">Neuen Raum anlegen und Link holen</button>
+
+        <div id="meldung"></div>
+
+        <div class="teilen verstecken" id="teilen">
+          <h3>Diesen Link weitergeben</h3>
+          <p>Wer ihn öffnet, gibt nur seinen Namen ein und ist dabei.</p>
+          <div class="teilen-zeile">
+            <input id="teilen-link" readonly>
+            <button id="teilen-kopieren">Kopieren</button>
+          </div>
+        </div>
+
+        <div class="lampen">
+          <span class="lampe" id="l-token"><i></i>Token-Dienst</span>
+          <span class="lampe" id="l-livekit"><i></i>LiveKit</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ======================= Raum ======================= -->
+<div id="raum" class="verstecken">
+
+  <header class="kopf">
+    <div class="wo">
+      <b id="k-raum">Kreis</b>
+      <span id="k-dauer">0:00</span>
+    </div>
+    <div class="ansicht-wahl">
+      <button id="a-sprecher" aria-pressed="false"><svg><use href="#i-person"/></svg>Sprecher</button>
+      <button id="a-galerie" aria-pressed="true"><svg><use href="#i-raster"/></svg>Galerie</button>
+    </div>
+    <button class="rund" id="k-vollbild" title="Vollbild"><svg><use href="#i-gross"/></svg></button>
   </header>
 
-  <div class="zustand">
-    <span class="lampe" id="l-token"><i></i><b>Token-Dienst</b> <span id="t-token">wird geprüft</span></span>
-    <span class="lampe" id="l-livekit"><i></i><b>LiveKit</b> <span id="t-livekit">wird geprüft</span></span>
-    <span class="lampe" id="l-raum"><i></i><b>Raum</b> <span id="t-raum">draußen</span></span>
-  </div>
-
-  <div class="kasten">
-    <h2>Prüfraum</h2>
-    <p class="hin">
-      Zwei Geräte mit demselben Raumnamen sehen und hören einander. Zum Prüfen genügt
-      ein zweiter Browsertab.
-    </p>
-
-    <div class="zeile" id="vorraum">
-      <label><span>Raum</span><input id="raum" value="probe" maxlength="64"></label>
-      <label><span>Dein Name</span><input id="name" placeholder="Timo" maxlength="48"></label>
-      <button class="haupt" id="beitreten">Beitreten</button>
+  <div class="mitte">
+    <div class="buehne">
+      <div class="raster" id="buehne" data-viele="1"></div>
     </div>
 
-    <div id="drin" class="verstecken">
-      <div class="steuer">
-        <button class="still" id="mikro">Mikrofon an</button>
-        <button class="still aus" id="kamera">Kamera aus</button>
-        <button class="still" id="protokollAn">Protokoll mitlaufen lassen</button>
-        <button class="weg" id="gehen" style="margin-left:auto">Verlassen</button>
+    <aside class="seite verstecken" id="seite">
+      <div class="seite-kopf">
+        <h2 id="seite-titel">Wer ist da</h2>
+        <span class="anzahl verstecken" id="seite-anzahl">0</span>
+        <button class="zu" id="seite-zu" title="Schließen"><svg><use href="#i-x"/></svg></button>
       </div>
+      <div class="warnkasten verstecken" id="warn-protokoll">
+        Jeder schreibt sein eigenes Mikrofon mit, darum stimmt die Zuordnung von selbst.
+        Die Spracherkennung läuft dabei über den Browser-Hersteller. Für einen Kreis trägt das.
+        Für Gesundheitsdaten nicht.
+      </div>
+      <div class="seite-koerper" id="seite-koerper"></div>
+      <div class="seite-fuss verstecken" id="seite-fuss"></div>
+    </aside>
+  </div>
 
-      <div class="kacheln" id="kacheln"></div>
+  <div class="stumm-hinweis verstecken" id="stumm-hinweis">
+    <svg><use href="#i-mikro-aus"/></svg>
+    <b>Du bist stumm</b>
+    <span id="stumm-zusatz">· Leertaste halten zum Sprechen</span>
+  </div>
 
-      <div class="protokoll verstecken" id="protokoll">
-        <div class="leer">Noch nichts gesagt.</div>
+  <div class="steuer">
+    <div class="steuer-gruppe">
+      <div class="mit-pfeil" style="position:relative">
+        <button class="knopf" id="s-mikro"><svg><use href="#i-mikro"/></svg><span class="wort">Ton an</span></button>
+        <button class="pfeil" id="s-mikro-pfeil" title="Mikrofon wählen"><svg><use href="#i-pfeil-hoch"/></svg></button>
+        <div class="aufklapp verstecken" id="k-mikro"></div>
+      </div>
+      <div class="mit-pfeil" style="position:relative">
+        <button class="knopf warnung" id="s-kamera"><svg><use href="#i-video-aus"/></svg><span class="wort">kein Bild</span></button>
+        <button class="pfeil" id="s-kamera-pfeil" title="Kamera wählen"><svg><use href="#i-pfeil-hoch"/></svg></button>
+        <div class="aufklapp verstecken" id="k-kamera"></div>
       </div>
     </div>
 
-    <div id="meldung"></div>
-  </div>
+    <div class="steuer-gruppe">
+      <button class="knopf" id="s-menschen"><svg><use href="#i-menschen"/></svg><span class="wort">Kreis</span><span class="zahl verstecken" id="z-menschen">0</span></button>
+      <button class="knopf" id="s-chat"><svg><use href="#i-chat"/></svg><span class="wort">Chat</span><span class="zahl verstecken" id="z-chat">0</span></button>
+      <button class="knopf" id="s-teilen"><svg><use href="#i-teilen"/></svg><span class="wort">teilen</span></button>
+      <div style="position:relative">
+        <button class="knopf" id="s-zeichen"><svg><use href="#i-lachen"/></svg><span class="wort">Zeichen</span></button>
+        <div class="aufklapp verstecken" id="k-zeichen">
+          <div class="zeichen-reihe">
+            <button data-z="hand">✋</button><button data-z="daumen">👍</button>
+            <button data-z="klatschen">👏</button><button data-z="herz">💛</button>
+            <button data-z="lachen">😄</button><button data-z="langsamer">🐢</button>
+          </div>
+        </div>
+      </div>
+      <button class="knopf" id="s-hand"><svg><use href="#i-hand"/></svg><span class="wort">Hand</span></button>
+      <button class="knopf" id="s-protokoll"><svg><use href="#i-blatt"/></svg><span class="wort">Protokoll</span><span class="punkt verstecken" id="p-laeuft"></span></button>
+    </div>
 
-  <footer>
-    Der Kreis im Real Life Network trägt mehr: Galerie und Sprecher-Ansicht, Chat, Zeichen,
-    gehobene Hände, Bildschirm teilen und ein Protokoll, das ins Wissensfeld geht.<br>
-    Quellcode: <a href="https://github.com/lichtungooo/kreis-server">kreis-server</a>
-    · Getragen vom Kollektiv Lichtung e.V.
-  </footer>
+    <div class="steuer-gruppe">
+      <button class="knopf gehen" id="s-gehen"><svg><use href="#i-auflegen"/></svg><span class="wort">gehen</span></button>
+    </div>
+  </div>
 
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.9.0/dist/livekit-client.umd.min.js"></script>
-<script>
-(function () {
-  "use strict"
-
-  const { Room, RoomEvent, Track } = LivekitClient
-  const $ = (id) => document.getElementById(id)
-
-  const TOKEN_URL = location.origin + "/token"
-  const SERVER_URL = "wss://" + location.host
-
-  let raum = null
-  let erkennung = null
-  let sollErkennen = false
-  const zeilen = []
-
-  // ---- Lampen ----
-  function lampe(welche, gut, text) {
-    const el = $("l-" + welche)
-    el.classList.remove("gut", "schlecht")
-    el.classList.add(gut ? "gut" : "schlecht")
-    $("t-" + welche).textContent = text
-  }
-
-  function melden(text, art) {
-    $("meldung").innerHTML = text
-      ? `<div class="meldung ${art || "fehler"}">${text}</div>`
-      : ""
-  }
-
-  // ---- Beim Laden pruefen, ob die Dienste wach sind ----
-  async function pruefen() {
-    try {
-      const a = await fetch(TOKEN_URL + "/gesund")
-      lampe("token", a.ok, a.ok ? "wach" : "antwortet mit " + a.status)
-    } catch {
-      lampe("token", false, "nicht erreichbar")
-    }
-    try {
-      const a = await fetch(location.origin + "/rtc/validate")
-      // 401 heisst: er lebt und will ein Token sehen. Genau richtig.
-      lampe("livekit", a.status === 401 || a.ok, a.status === 401 ? "wach" : "antwortet mit " + a.status)
-    } catch {
-      lampe("livekit", false, "nicht erreichbar")
-    }
-  }
-
-  // ---- Kacheln ----
-  function initialen(name) {
-    return name.split(/\s+/).map((t) => t[0]).filter(Boolean).join("").slice(0, 2).toUpperCase()
-  }
-
-  function kachelnZeichnen() {
-    if (!raum) return
-    const alle = [raum.localParticipant, ...raum.remoteParticipants.values()]
-    const ziel = $("kacheln")
-    ziel.innerHTML = ""
-
-    alle.forEach((person) => {
-      const ich = person === raum.localParticipant
-      const kachel = document.createElement("div")
-      kachel.className = "kachel" + (person.isSpeaking ? " spricht" : "")
-
-      const bild = person.getTrackPublication(Track.Source.Camera)
-      if (bild && bild.track && person.isCameraEnabled) {
-        const v = document.createElement("video")
-        v.autoplay = true
-        v.playsInline = true
-        v.muted = true
-        bild.track.attach(v)
-        kachel.appendChild(v)
-      } else {
-        const kreis = document.createElement("div")
-        kreis.className = "initialen"
-        kreis.textContent = initialen(person.name || person.identity) || "?"
-        kachel.appendChild(kreis)
-      }
-
-      if (!ich) {
-        const ton = person.getTrackPublication(Track.Source.Microphone)
-        if (ton && ton.track) {
-          const a = document.createElement("audio")
-          a.autoplay = true
-          ton.track.attach(a)
-          kachel.appendChild(a)
-        }
-      }
-
-      const name = document.createElement("div")
-      name.className = "name"
-      name.innerHTML = (person.isMicrophoneEnabled ? "" : '<span class="stumm">stumm</span>') +
-        "<span>" + (person.name || person.identity) + (ich ? " (ich)" : "") + "</span>"
-      kachel.appendChild(name)
-
-      ziel.appendChild(kachel)
-    })
-  }
-
-  // ---- Beitreten ----
-  $("beitreten").addEventListener("click", async () => {
-    const raumName = $("raum").value.trim()
-    const name = $("name").value.trim() || "Gast"
-    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(raumName)) {
-      melden("Der Raumname trägt Buchstaben, Ziffern, Strich und Unterstrich.")
-      return
-    }
-
-    melden("")
-    $("beitreten").disabled = true
-    $("beitreten").textContent = "verbindet"
-
-    try {
-      const adresse = new URL(TOKEN_URL)
-      adresse.searchParams.set("raum", raumName)
-      adresse.searchParams.set("name", name)
-      const antwort = await fetch(adresse)
-      if (!antwort.ok) {
-        const k = await antwort.json().catch(() => ({}))
-        throw new Error(k.fehler || "Der Token-Dienst antwortete mit " + antwort.status)
-      }
-      const { token } = await antwort.json()
-
-      raum = new Room({ adaptiveStream: true, dynacast: true })
-
-      const frisch = () => kachelnZeichnen()
-      raum.on(RoomEvent.ParticipantConnected, frisch)
-      raum.on(RoomEvent.ParticipantDisconnected, frisch)
-      raum.on(RoomEvent.TrackSubscribed, frisch)
-      raum.on(RoomEvent.TrackUnsubscribed, frisch)
-      raum.on(RoomEvent.TrackMuted, frisch)
-      raum.on(RoomEvent.TrackUnmuted, frisch)
-      raum.on(RoomEvent.LocalTrackPublished, frisch)
-      raum.on(RoomEvent.LocalTrackUnpublished, frisch)
-      raum.on(RoomEvent.ActiveSpeakersChanged, frisch)
-      raum.on(RoomEvent.Disconnected, () => verlassen(true))
-
-      raum.on(RoomEvent.DataReceived, (nutzlast) => {
-        try {
-          const n = JSON.parse(new TextDecoder().decode(nutzlast))
-          if (n.art === "transkript") zeileAblegen(n.zeile)
-        } catch {}
-      })
-
-      await raum.connect(SERVER_URL, token)
-      await raum.localParticipant.setMicrophoneEnabled(true)
-
-      lampe("raum", true, "drin, Raum " + raumName)
-      $("vorraum").classList.add("verstecken")
-      $("drin").classList.remove("verstecken")
-      melden("Der Weg steht: Token geholt, verbunden, Raum betreten.", "gut")
-      kachelnZeichnen()
-    } catch (e) {
-      melden(e.message || "Die Verbindung kam nicht zustande.")
-      lampe("raum", false, "fehlgeschlagen")
-    } finally {
-      $("beitreten").disabled = false
-      $("beitreten").textContent = "Beitreten"
-    }
-  })
-
-  // ---- Steuerung ----
-  $("mikro").addEventListener("click", async () => {
-    if (!raum) return
-    const an = !raum.localParticipant.isMicrophoneEnabled
-    await raum.localParticipant.setMicrophoneEnabled(an)
-    $("mikro").textContent = an ? "Mikrofon an" : "Mikrofon aus"
-    $("mikro").classList.toggle("aus", !an)
-    kachelnZeichnen()
-  })
-
-  $("kamera").addEventListener("click", async () => {
-    if (!raum) return
-    const an = !raum.localParticipant.isCameraEnabled
-    await raum.localParticipant.setCameraEnabled(an)
-    $("kamera").textContent = an ? "Kamera an" : "Kamera aus"
-    $("kamera").classList.toggle("aus", !an)
-    kachelnZeichnen()
-  })
-
-  $("gehen").addEventListener("click", () => verlassen(false))
-
-  async function verlassen(vonAussen) {
-    protokollHalten()
-    if (raum && !vonAussen) await raum.disconnect()
-    raum = null
-    $("drin").classList.add("verstecken")
-    $("vorraum").classList.remove("verstecken")
-    $("kacheln").innerHTML = ""
-    lampe("raum", false, "draußen")
-    melden("")
-  }
-
-  // ---- Protokoll: jeder schreibt sein eigenes Mikrofon mit ----
-  function zeileAblegen(zeile) {
-    const i = zeilen.findIndex((z) => z.wer === zeile.wer && z.offen)
-    if (i >= 0) zeilen.splice(i, 1)
-    if (zeile.text.trim()) zeilen.push({ ...zeile, offen: zeile.vorlaeufig })
-    protokollZeichnen()
-  }
-
-  function protokollZeichnen() {
-    const ziel = $("protokoll")
-    if (!zeilen.length) {
-      ziel.innerHTML = '<div class="leer">Noch nichts gesagt.</div>'
-      return
-    }
-    ziel.innerHTML = zeilen.map((z) => {
-      const uhr = new Date(z.wann).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
-      return `<div class="satz ${z.offen ? "offen" : ""}">
-        <span class="wer">${z.name}</span> <span style="color:var(--matt);font-size:11px">${uhr}</span><br>${z.text}
-      </div>`
-    }).join("")
-    ziel.scrollTop = ziel.scrollHeight
-  }
-
-  $("protokollAn").addEventListener("click", () => {
-    if (sollErkennen) { protokollHalten(); return }
-    if (!raum) return
-
-    const Bauplan = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!Bauplan) {
-      melden("Dieser Browser kennt keine Spracherkennung. Chrome und Edge tragen sie.")
-      return
-    }
-
-    erkennung = new Bauplan()
-    erkennung.lang = "de-DE"
-    erkennung.continuous = true
-    erkennung.interimResults = true
-
-    erkennung.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const text = String(e.results[i][0]?.transcript ?? "").trim()
-        if (!text) continue
-        const zeile = {
-          id: Date.now() + "-" + i,
-          wer: raum.localParticipant.identity,
-          name: raum.localParticipant.name || "ich",
-          text,
-          wann: Date.now(),
-          vorlaeufig: !e.results[i].isFinal,
-        }
-        zeileAblegen(zeile)
-        const nutzlast = new TextEncoder().encode(JSON.stringify({ art: "transkript", zeile }))
-        raum.localParticipant.publishData(nutzlast, { reliable: true })
-      }
-    }
-
-    erkennung.onerror = (e) => {
-      const art = String(e?.error ?? "")
-      if (art === "no-speech" || art === "aborted") return
-      melden("Die Spracherkennung meldet: " + art)
-    }
-
-    // Chrome beendet sie nach einer Weile Stille von selbst.
-    erkennung.onend = () => { if (sollErkennen) { try { erkennung.start() } catch {} } }
-
-    try {
-      erkennung.start()
-      sollErkennen = true
-      $("protokollAn").textContent = "Protokoll läuft mit"
-      $("protokoll").classList.remove("verstecken")
-    } catch (e) {
-      melden(e.message)
-    }
-  })
-
-  function protokollHalten() {
-    sollErkennen = false
-    if (erkennung) { try { erkennung.stop() } catch {} }
-    erkennung = null
-    $("protokollAn").textContent = "Protokoll mitlaufen lassen"
-  }
-
-  pruefen()
-})()
-</script>
+<script src="/kreis.js"></script>
 </body>
 </html>
