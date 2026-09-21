@@ -28,6 +28,10 @@
   let pegelTakt = 0
   let erkennung = null
   let sollErkennen = false
+  let rolle = "gast"
+  let moderatorWort = ""
+  let galerieSeite = 0
+  const qualitaet = new Map()
   let leertasteHaelt = false
   let warStumm = false
   let gelesenBis = 0
@@ -69,6 +73,22 @@
   }
 
   const uhr = (wann) => new Date(wann).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
+
+  /**
+   * Wie viele Kacheln eine Galerie-Seite traegt.
+   *
+   * ⚠ Die Grenze ist kein Schoenheitsfehler, sondern Bandbreite.
+   *
+   * Jedes sichtbare Video ist ein eigener Strom, den der Browser
+   * dekodiert. Bei zwanzig Menschen gleichzeitig steht der Luefter
+   * still nicht mehr, und schmale Leitungen geben auf. Zoom zeigt
+   * darum fuenfundzwanzig je Seite, wir nehmen zwoelf: die Kacheln
+   * bleiben gross genug, um Gesichter zu erkennen.
+   *
+   * Wer nicht auf der Seite steht, wird abbestellt. Sein Ton laeuft
+   * weiter, nur das Bild ruht.
+   */
+  const JE_SEITE = 12
 
   // ---------- Geräte ----------
   async function geraeteHolen() {
@@ -177,10 +197,13 @@
       const a = await fetch(`${TOKEN_WEG}/raum?raum=${encodeURIComponent(name)}`)
       const k = await a.json()
       if (!a.ok) throw new Error(k.fehler)
-      zugang = k.zugang
+      zugang = k.moderator
+      moderatorWort = k.moderator
       raumName = k.raum
       $("e-raum").value = k.raum
-      const link = `${location.origin}/#${k.raum}:${k.zugang}`
+      // Der Link traegt das Gast-Wort. Wer ihn bekommt, kommt herein,
+      // fuehrt den Raum aber nicht.
+      const link = `${location.origin}/#${k.raum}:${k.gast}`
       $("teilen-link").value = link
       $("teilen").classList.remove("verstecken")
       history.replaceState(null, "", `#${k.raum}:${k.zugang}`)
@@ -216,7 +239,9 @@
         const a = await fetch(`${TOKEN_WEG}/raum?raum=${encodeURIComponent(wunschRaum)}`)
         const k = await a.json()
         if (!a.ok) throw new Error(k.fehler)
-        zugang = k.zugang
+        // Wer den Raum hier von Hand eintippt, fuehrt ihn auch.
+        zugang = k.moderator
+        moderatorWort = k.moderator
         raumName = k.raum
       } catch (e) { melden(e.message || "Dieser Raum geht nicht auf."); return }
     }
@@ -234,6 +259,7 @@
       const k = await a.json()
       if (!a.ok) throw new Error(k.fehler)
 
+      rolle = k.rolle || "gast"
       raum = new Room({ adaptiveStream: true, dynacast: true })
       lauschen(raum)
 
@@ -250,6 +276,8 @@
       $("vorraum").classList.add("verstecken")
       $("raum").classList.remove("verstecken")
       $("k-raum").textContent = raumName
+      $("k-fuehrt").classList.toggle("verstecken", rolle !== "moderator")
+      if (rolle === "moderator") moderatorWort = zugang
       ansichtSetzen(ansicht)
       zeichnen()
     } catch (e) {
@@ -268,6 +296,11 @@
       RoomEvent.TrackMuted, RoomEvent.TrackUnmuted,
       RoomEvent.LocalTrackPublished, RoomEvent.LocalTrackUnpublished,
       RoomEvent.ActiveSpeakersChanged].forEach((e) => r.on(e, frisch))
+
+    r.on(RoomEvent.ConnectionQualityChanged, (stufe, person) => {
+      qualitaet.set(person.identity, stufe)
+      zeichnen()
+    })
 
     r.on(RoomEvent.Disconnected, () => gehen(true))
 
@@ -335,6 +368,10 @@
     oben.className = "oben"
     el.appendChild(oben)
 
+    const netz = document.createElement("span")
+    netz.className = "netz"
+    el.appendChild(netz)
+
     const nadel = document.createElement("button")
     nadel.className = "anheften"
     nadel.innerHTML = '<svg><use href="#i-nadel"/></svg>'
@@ -349,7 +386,7 @@
     el.appendChild(fuss)
 
     return {
-      el, video, audio, initialenFeld, oben, nadel, fuss,
+      el, video, audio, initialenFeld, oben, nadel, fuss, netz,
       videoTrack: null, audioTrack: null,
       // Was zuletzt gezeigt wurde, damit nur Geaendertes angefasst wird.
       war: {},
@@ -418,6 +455,19 @@
     if (k.war.geteilt !== geteilt) {
       k.nadel.classList.toggle("verstecken", geteilt)
       k.war.geteilt = geteilt
+    }
+
+    // --- Verbindung ---
+    // Nur zeigen, wenn es klemmt. Eine gute Leitung braucht kein Zeichen.
+    const stufe = qualitaet.get(person.identity) || "unknown"
+    const schlecht = stufe === "poor" || stufe === "lost"
+    if (k.war.netz !== stufe) {
+      k.netz.className = "netz" + (schlecht ? " sichtbar" : "")
+      k.netz.title = stufe === "lost" ? "Verbindung abgerissen" : "Schwache Verbindung"
+      k.netz.innerHTML = stufe === "lost"
+        ? '<svg><use href="#i-netz-weg"/></svg>'
+        : '<svg><use href="#i-netz-schwach"/></svg>'
+      k.war.netz = stufe
     }
 
     // --- Fuss ---
@@ -539,11 +589,20 @@
     buehne.removeAttribute("style")
 
     if (ansicht === "galerie" && !teilend) {
+      const seiten = Math.max(1, Math.ceil(leute.length / JE_SEITE))
+      if (galerieSeite >= seiten) galerieSeite = seiten - 1
+      const von = galerieSeite * JE_SEITE
+      const drauf = leute.slice(von, von + JE_SEITE)
+
+      bilderSteuern(leute, drauf)
+
       buehne.className = "raster"
-      buehne.dataset.viele = String(Math.min(4, Math.ceil(Math.sqrt(leute.length))))
-      leute.forEach((p) => buehne.appendChild(kachelHolen(p, false, false)))
+      buehne.dataset.viele = String(Math.min(4, Math.ceil(Math.sqrt(drauf.length))))
+      drauf.forEach((p) => buehne.appendChild(kachelHolen(p, false, false)))
+      blaetternZeigen(seiten, leute.length)
       return
     }
+    blaetternZeigen(1, leute.length)
 
     buehne.className = ""
     buehne.removeAttribute("data-viele")
@@ -557,12 +616,49 @@
     buehne.appendChild(oben)
 
     const rest = teilend ? leute : leute.filter((p) => p !== grosse)
+    // Im Streifen tragen die ersten zwoelf ein Bild, der Rest ruht.
+    bilderSteuern(leute, [grosse, ...rest.slice(0, JE_SEITE)].filter(Boolean))
     if (rest.length) {
       const streifen = document.createElement("div")
       streifen.className = "streifen"
       rest.forEach((p) => streifen.appendChild(kachelHolen(p, false, false)))
       buehne.appendChild(streifen)
     }
+  }
+
+  /**
+   * Bilder an- und abbestellen.
+   *
+   * ⚠ Das ist der Hebel fuer grosse Raeume.
+   *
+   * Ohne ihn schickt der Server jedes Bild an jeden, auch das von
+   * Menschen, die gerade niemand sieht. Bei zwanzig Teilnehmern sind
+   * das zwanzig Stroeme je Browser. `setEnabled(false)` sagt dem Server:
+   * dieses Bild brauche ich gerade nicht. Der Ton laeuft weiter, nur
+   * das Bild ruht, und es kommt sofort zurueck, wenn die Kachel wieder
+   * sichtbar wird.
+   */
+  function bilderSteuern(alleLeute, sichtbare) {
+    const dabei = new Set(sichtbare.map((p) => p.identity))
+    alleLeute.forEach((person) => {
+      if (person === raum.localParticipant) return
+      const pub = person.getTrackPublication(Track.Source.Camera)
+      if (!pub || typeof pub.setEnabled !== "function") return
+      const soll = dabei.has(person.identity)
+      if (pub.isEnabled !== soll) {
+        try { pub.setEnabled(soll) } catch (e) {}
+      }
+    })
+  }
+
+  /** Blaettern zeigen, sobald mehr Menschen da sind als auf eine Seite passen. */
+  function blaetternZeigen(seiten, wieViele) {
+    const leiste = $("blaettern")
+    if (seiten <= 1) { leiste.classList.add("verstecken"); return }
+    leiste.classList.remove("verstecken")
+    $("b-stand").textContent = `${galerieSeite + 1} von ${seiten} · ${wieViele} Menschen`
+    $("b-zurueck").disabled = galerieSeite === 0
+    $("b-weiter").disabled = galerieSeite >= seiten - 1
   }
 
   /**
@@ -628,6 +724,9 @@
     $("a-sprecher").setAttribute("aria-pressed", String(welche === "sprecher"))
     zeichnen()
   }
+  $("b-zurueck").onclick = () => { if (galerieSeite > 0) { galerieSeite--; letzteAnordnung = ""; zeichnen() } }
+  $("b-weiter").onclick = () => { galerieSeite++; letzteAnordnung = ""; zeichnen() }
+
   $("a-galerie").onclick = () => ansichtSetzen("galerie")
   $("a-sprecher").onclick = () => ansichtSetzen("sprecher")
 
@@ -703,6 +802,37 @@
   aufklappBinden($("s-mikro-pfeil"), $("k-mikro"), () => { geraeteHolen(); geraeteListe($("k-mikro"), mikrofone, "Mikrofon", "audioinput") })
   aufklappBinden($("s-kamera-pfeil"), $("k-kamera"), () => { geraeteHolen(); geraeteListe($("k-kamera"), kameras, "Kamera", "videoinput") })
 
+  /**
+   * Einen Moderator-Befehl absetzen.
+   *
+   * ⚠ Der Befehl geht an den Token-Dienst, nicht an LiveKit direkt.
+   *
+   * Ein Teilnehmer kann einen anderen im Browser nicht stummschalten,
+   * und das ist richtig so. Der Dienst prueft das Moderator-Wort und
+   * setzt den Befehl ueber die Server-API ab. Die Sperre haengt an
+   * etwas, das ein Gast nicht hat.
+   */
+  async function fuehren(was, wen, name) {
+    if (rolle !== "moderator") return
+    const frage = was === "raus"
+      ? `${name} aus dem Kreis weisen?`
+      : `${name} stummschalten?`
+    if (!confirm(frage)) return
+
+    try {
+      const adresse = new URL(TOKEN_WEG + "/mod")
+      adresse.searchParams.set("raum", raumName)
+      adresse.searchParams.set("zugang", moderatorWort)
+      adresse.searchParams.set("was", was)
+      adresse.searchParams.set("wen", wen)
+      const a = await fetch(adresse)
+      const k = await a.json()
+      if (!a.ok) alert(k.fehler || "Der Befehl ging nicht durch.")
+    } catch (e) {
+      alert("Der Befehl ging nicht durch.")
+    }
+  }
+
   // ---------- Seitenleiste ----------
   const TITEL = { menschen: "Wer ist da", chat: "Geschriebenes", protokoll: "Protokoll" }
 
@@ -730,20 +860,44 @@
       const leute = alle()
       anzahl.textContent = String(leute.length)
       anzahl.classList.remove("verstecken")
-      koerper.innerHTML = leute.map((p) => {
+
+      // Wer die Hand hebt, steht oben. In einer langen Liste findet
+      // man eine gehobene Hand sonst nicht.
+      const sortiert = [...leute].sort((a, b) => {
+        const ha = haende.has(a.identity) ? 0 : 1
+        const hb = haende.has(b.identity) ? 0 : 1
+        return ha - hb
+      })
+
+      koerper.innerHTML = sortiert.map((p) => {
         const name = p.name || p.identity
         const ich = p === raum.localParticipant
-        return `<div class="person">
+        const meldet = haende.has(p.identity)
+        const stufe = qualitaet.get(p.identity) || ""
+        const klemmt = stufe === "poor" || stufe === "lost"
+        const fuehrKnoepfe = (rolle === "moderator" && !ich)
+          ? `<span class="fuehren">
+               <button data-was="stumm" data-wen="${p.identity}" data-name="${name}" title="Stummschalten"><svg><use href="#i-mikro-aus"/></svg></button>
+               <button class="gefahr" data-was="raus" data-wen="${p.identity}" data-name="${name}" title="Aus dem Kreis weisen"><svg><use href="#i-tuer"/></svg></button>
+             </span>`
+          : ""
+        return `<div class="person${meldet ? " meldet" : ""}">
           <span class="bild" style="background:${farbe(name)}">${initialen(name)}</span>
           <span class="name">${name}${ich ? " <em>(ich)</em>" : ""}</span>
           <span class="zeichen">
-            ${haende.has(p.identity) ? '<svg style="color:var(--gelb)"><use href="#i-hand"/></svg>' : ""}
+            ${klemmt ? `<svg style="color:var(--gelb)" title="Schwache Verbindung"><use href="#i-netz-${stufe === "lost" ? "weg" : "schwach"}"/></svg>` : ""}
+            ${meldet ? '<svg style="color:var(--gelb)"><use href="#i-hand"/></svg>' : ""}
             ${p.isScreenShareEnabled ? '<svg style="color:var(--blau)"><use href="#i-teilen"/></svg>' : ""}
             ${p.isSpeaking ? '<span class="redet"></span>' : ""}
             ${p.isMicrophoneEnabled ? "" : '<svg style="color:var(--rot)"><use href="#i-mikro-aus"/></svg>'}
           </span>
+          ${fuehrKnoepfe}
         </div>`
       }).join("")
+
+      koerper.querySelectorAll(".fuehren button").forEach((b) => {
+        b.onclick = () => fuehren(b.dataset.was, b.dataset.wen, b.dataset.name)
+      })
       fuss.classList.add("verstecken")
       return
     }
@@ -903,6 +1057,8 @@
     raum = null; seit = null
     haende.clear(); zeichen.clear()
     kacheln.clear(); letzteAnordnung = ""; grosserJetzt = null
+    qualitaet.clear(); galerieSeite = 0; rolle = "gast"; moderatorWort = ""
+    $("k-fuehrt").classList.add("verstecken")
     chat.length = 0; rede.length = 0; gelesenBis = 0
     seitenblatt = null
     $("seite").classList.add("verstecken")

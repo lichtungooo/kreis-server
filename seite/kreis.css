@@ -413,3 +413,55 @@ h1 { margin: 0 0 6px; font-size: 27px; font-weight: 650; letter-spacing: -.025em
   background: rgba(251,191,36,.11); color: #FCD34D;
   font-size: 11.5px; line-height: 1.5;
 }
+
+
+/* ---------- Grosse Räume ---------- */
+
+/* Das Netz-Zeichen erscheint nur, wenn es klemmt.
+   Eine gute Leitung braucht kein Symbol. */
+.netz {
+  position: absolute; right: 8px; bottom: 8px;
+  display: none; place-items: center;
+  width: 24px; height: 24px; border-radius: 7px;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
+  color: var(--gelb);
+}
+.netz.sichtbar { display: grid; }
+.netz svg { width: 13px; height: 13px; }
+
+.blaettern {
+  flex: none; display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 7px; border-radius: 12px; background: var(--flaeche);
+  font-size: 12px; color: var(--leise);
+}
+.blaettern button {
+  width: 30px; height: 30px; border-radius: 8px;
+  background: var(--hoch); color: var(--hell);
+  display: grid; place-items: center;
+}
+.blaettern button:hover:not(:disabled) { background: var(--matt); }
+.blaettern button svg { width: 14px; height: 14px; }
+.blaettern span { min-width: 140px; text-align: center; }
+
+.fuehrt {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-left: 8px; padding: 2px 8px; border-radius: 20px;
+  background: rgba(96,165,250,.16); color: var(--blau);
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
+.fuehrt svg { width: 11px; height: 11px; }
+
+/* Moderator-Knöpfe in der Teilnehmerliste */
+.person .fuehren { display: flex; gap: 3px; flex: none; opacity: 0; transition: opacity .15s; }
+.person:hover .fuehren { opacity: 1; }
+.person .fuehren button {
+  width: 26px; height: 26px; border-radius: 7px;
+  background: var(--hoch); color: var(--leise);
+  display: grid; place-items: center;
+}
+.person .fuehren button:hover { background: var(--matt); color: var(--hell); }
+.person .fuehren button.gefahr:hover { background: var(--rot); color: #2A0A0A; }
+.person .fuehren button svg { width: 13px; height: 13px; }
+
+/* Wer die Hand hebt, steht oben und ist markiert */
+.person.meldet { background: rgba(251,191,36,.09); }
