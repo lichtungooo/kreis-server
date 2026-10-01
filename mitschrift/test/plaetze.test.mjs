@@ -66,3 +66,13 @@ test("zu viel wartender Ton faellt weg, statt den Speicher zu fuellen", () => {
   assert.equal(a.verworfen, true)
   assert.equal(a.bloecke.length, 0)
 })
+
+test("Ton an einer ungeraden Stelle im Puffer wird richtig gelesen (der Absturz vom 01.10.2026)", async () => {
+  const { alsFliess } = await import("../server.mjs")
+  const gross = Buffer.alloc(9)
+  gross.writeInt16LE(16384, 1)
+  gross.writeInt16LE(-32768, 3)
+  const ungerade = gross.subarray(1, 5) // beginnt bei Byte 1
+  assert.equal(ungerade.byteOffset % 2, 1)
+  assert.deepEqual([...alsFliess(ungerade)], [0.5, -1])
+})

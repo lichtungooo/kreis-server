@@ -203,11 +203,19 @@ async function erkennen(sitzung, a) {
   }
 }
 
-/** Int16 (wie der Browser schickt) in Float32 (wie das Modell will). */
-function alsFliess(roh) {
-  const ganz = new Int16Array(roh.buffer, roh.byteOffset, Math.floor(roh.byteLength / 2))
-  const aus = new Float32Array(ganz.length)
-  for (let i = 0; i < ganz.length; i++) aus[i] = ganz[i] / 32768
+/**
+ * Int16 (wie der Browser schickt) in Float32 (wie das Modell will).
+ *
+ * ⚠ Gelesen wird Wert fuer Wert, nicht ueber eine Int16Array-Sicht: `ws` legt
+ * kleine Nachrichten in einen gemeinsamen Puffer, oft an eine ungerade Stelle.
+ * Eine Sicht darauf wirft dann (RangeError), und das warf am 01.10.2026 den
+ * ganzen Dienst um, dreimal in Timos erstem Test; die Saetze bis zum
+ * Wiederverbinden fehlten.
+ */
+export function alsFliess(roh) {
+  const n = Math.floor(roh.byteLength / 2)
+  const aus = new Float32Array(n)
+  for (let i = 0; i < n; i++) aus[i] = roh.readInt16LE(i * 2) / 32768
   return aus
 }
 
@@ -253,8 +261,13 @@ wss.on("connection", (ws) => {
   const frist = setTimeout(() => { if (!zutritt) ws.close(4401, "kein Zutritt") }, 10_000)
 
   ws.on("message", (daten, binaer) => {
+    // Eine kaputte Nachricht darf nie den Dienst umwerfen: verwerfen, weiter.
+    try { verarbeiten(daten, binaer) } catch (fehler) { console.error("Nachricht verworfen:", fehler?.message ?? fehler) }
+  })
+
+  function verarbeiten(daten, binaer) {
     if (binaer) {
-      if (zutritt && offen && daten.byteLength <= BLOCK_MAX) offen.dazu(alsFliess(daten))
+      if (zutritt && offen && daten.byteLength <= BLOCK_MAX) offen.dazu(alsFliess(Buffer.isBuffer(daten) ? daten : Buffer.from(daten)))
       return
     }
     let n
@@ -278,7 +291,7 @@ wss.on("connection", (ws) => {
       offen.ende()
       offen = null
     }
-  })
+  }
 
   ws.on("close", () => { clearTimeout(frist); offen?.ende(); offen = null })
 })
