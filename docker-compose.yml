@@ -93,6 +93,33 @@ services:
       - "traefik.http.services.kreis-token.loadbalancer.server.port=7880"
       - "com.centurylinklabs.watchtower.enable=false"
 
+  # Die Mitschrift: Nemotron 3.5 ASR auf der CPU, je Mensch das eigene
+  # Mikrofon. Das Modell liest sie aus dem Volume von Antons Redekreis
+  # (~/apps/talking-circle), nur lesend; geladen wird nichts doppelt.
+  mitschrift:
+    build: ./mitschrift
+    container_name: kreis-mitschrift
+    restart: unless-stopped
+    networks: [kreis]
+    environment:
+      LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET fehlt}"
+      ERLAUBTE_HERKUNFT: "${ERLAUBTE_HERKUNFT:-https://reallife.network,http://localhost:5173}"
+      MITSCHRIFT_FAEDEN: "${MITSCHRIFT_FAEDEN:-3}"
+      PORT: "7884"
+    volumes:
+      - redekreis-modelle:/models:ro
+    # Das Modell braucht rund 1,3 GB. Mehr bekommt der Dienst nicht.
+    mem_limit: 2g
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=kreis"
+      - "traefik.http.routers.kreis-mitschrift.rule=Host(`kreis.wir.ooo`) && PathPrefix(`/mitschrift`)"
+      - "traefik.http.routers.kreis-mitschrift.entrypoints=websecure"
+      - "traefik.http.routers.kreis-mitschrift.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.kreis-mitschrift.priority=20"
+      - "traefik.http.services.kreis-mitschrift.loadbalancer.server.port=7884"
+      - "com.centurylinklabs.watchtower.enable=false"
+
   seite:
     image: nginx:1.27-alpine
     container_name: kreis-seite
@@ -110,3 +137,9 @@ services:
       - "traefik.http.routers.kreis-seite.priority=1"
       - "traefik.http.services.kreis-seite.loadbalancer.server.port=80"
       - "com.centurylinklabs.watchtower.enable=false"
+
+volumes:
+  # Gehoert Antons Redekreis (~/apps/talking-circle); hier nur gelesen.
+  redekreis-modelle:
+    name: talking-circle_modelle
+    external: true

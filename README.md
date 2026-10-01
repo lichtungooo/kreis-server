@@ -11,11 +11,13 @@ Trägt den Raum, in dem Menschen und später auch Eli zusammen sitzen: Video, Au
 | Konzept | `d:\Workspace\30-konzepte\kreis-modul\konzept.md` |
 | Modul | `20-repos/rln/src/modules/kreis/` |
 
-## Zwei Dienste
+## Drei Dienste
 
 **livekit** ist der SFU. Er nimmt die Ströme aller Teilnehmer entgegen und leitet sie weiter. Läuft im Host-Netz, weil WebRTC viele UDP-Ports braucht und NAT zwischen Container und Welt die Verbindung sonst zerlegt.
 
 **token** stellt kurzlebige Zutritts-Token aus. Er existiert aus einem Grund: **das API-Geheimnis darf niemals in den Browser.** Ein Token gilt eine Stunde, für genau einen Raum, mit genau einem Namen. Die Lehre dahinter steht in `memory/feedback_sperre_pruefbares.md`: eine Sperre prüft, was jemand **nicht hat**, niemals was er behaupten kann.
+
+**mitschrift** schreibt mit, was in der Konferenz gesagt wird (Conferencing-Modul im Real Life Stack). Jeder Browser schickt nur die Sprachabschnitte seines eigenen Mikrofons; darum stimmt der Name immer, ohne Sprechererkennung. Erkannt wird mit **NVIDIA Nemotron 3.5 ASR Streaming 0.6B** (Gewichte unter OpenMDW 1.1, der freien Modell-Lizenz der Linux Foundation) über [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) auf der CPU, nach dem Weg aus Antons [Redekreis](https://github.com/antontranelis/talking-circle) (MIT). Das Modell (rund 750 MB) liest der Dienst nur lesend aus dessen Volume `talking-circle_modelle`. Zutritt nur mit dem LiveKit-Token des Raums; der Ton bleibt nirgends liegen. Ein Modell trägt einen Strom zugleich, darum laufen alle Abschnitte durch eine Warteschlange. Gemessen auf vier Kernen: rund 3,3-fache Echtzeit, 1,3 GB Speicher. Lebenszeichen mit Messwerten: `https://kreis.wir.ooo/mitschrift/gesund`.
 
 ## Einrichten
 
@@ -40,6 +42,7 @@ Die Datei `.env` bleibt auf dem Server und geht nie ins Repo.
 | 3478 | TURN über UDP | direkt |
 | 5349 | TURN über TLS | über Traefik |
 | 7880 | Token-Dienst | über Traefik, Pfad `/token` |
+| 7884 | Mitschrift | über Traefik, Pfad `/mitschrift` (WebSocket) |
 
 ## Was der Host noch braucht
 
